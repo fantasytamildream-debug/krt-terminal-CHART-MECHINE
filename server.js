@@ -2,7 +2,7 @@
    Zero dependencies (Node 18+). Reads market data only — it never places orders.
    Env: ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN (MPIN), ANGEL_TOTP_SECRET, ACCESS_KEY, ALLOW_ORIGIN, [ALL_FNO=true], [M1_DAYS=5] */
 'use strict';
-const http = require('http'), crypto = require('crypto'), zlib = require('zlib');
+const http = require('http'), crypto = require('crypto'), zlib = require('zlib'), fs = require('fs'), path = require('path');
 const E = process.env, PORT = E.PORT || 10000, API = E.ANGEL_BASE || 'https://apiconnect.angelone.in';
 const ACCESS = E.ACCESS_KEY || '', ORIGIN = E.ALLOW_ORIGIN || '*', M1_DAYS = +E.M1_DAYS || 5, ALL_FNO = /^(1|true|yes)$/i.test(E.ALL_FNO || '');
 const MASTER_URL = E.MASTER_URL || 'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json';
@@ -188,7 +188,13 @@ const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, 'http://x');
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': ORIGIN, 'Access-Control-Allow-Headers': '*' }); return res.end(); }
-    if (u.pathname === '/' || u.pathname === '/health') return send(req, res, 200, { ok: true, service: 'krt-backend', loggedIn: ST.loggedIn, error: ST.error });
+    if (u.pathname === '/health') return send(req, res, 200, { ok: true, service: 'krt-backend', loggedIn: ST.loggedIn, error: ST.error });
+    if (u.pathname === '/' || u.pathname === '/index.html') {
+      const f = [path.join(__dirname, 'index.html'), path.join(__dirname, '..', 'index.html')].find(p => fs.existsSync(p));
+      if (!f) return send(req, res, 200, { ok: true, service: 'krt-backend', loggedIn: ST.loggedIn, error: ST.error, note: 'index.html not found next to the backend' });
+      const html = fs.readFileSync(f, 'utf8').replace('</head>', `<script>window.KRT_SAME_ORIGIN=1;window.KRT_NEEDS_KEY=${ACCESS ? 1 : 0};</script></head>`);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); return res.end(html);
+    }
     if (ACCESS && (u.searchParams.get('key') || req.headers['x-access-key']) !== ACCESS) return send(req, res, 401, { error: 'wrong access key' });
     const p = u.searchParams;
     switch (u.pathname) {
