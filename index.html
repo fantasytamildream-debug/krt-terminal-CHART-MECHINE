@@ -839,7 +839,9 @@ try{const c=ld('krt_calib',{});for(const k in c){const s=SYM[k];if(!s)continue;c
 try{const L=ld('krt_lots',{});for(const k in L)if(SYM[k])SYM[k].lot=L[k]}catch(e){}
 POS=POS.filter(p=>SYM[p.sym]);
 scanAll();renderTicker();go('mkt');setInterval(tick,250);
-setInterval(liveLoop,1000);if(LIVE.url&&LIVE.auto)connectLive();
+setInterval(liveLoop,1000);
+if(window.KRT_SAME_ORIGIN){LIVE.url=location.origin;if(!window.KRT_NEEDS_KEY||LIVE.key)connectLive();else{go('set');setTimeout(()=>{const e=$('#lvState');if(e)e.innerHTML='<span class="ac">Enter your ACCESS_KEY above and tap Connect live.</span>'},50)}}
+else if(LIVE.url&&LIVE.auto)connectLive();
 </script>
 </body>
 </html>
