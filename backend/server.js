@@ -41,7 +41,7 @@ async function login() {
   ST.jwt = j.data.jwtToken; ST.loggedIn = true; ST.error = ''; log('Angel login OK');
 }
 function limiter(gap) { let last = 0, chain = Promise.resolve(); return fn => { const p = chain.then(async () => { const w = last + gap - Date.now(); if (w > 0) await sleep(w); last = Date.now(); return fn(); }); chain = p.catch(() => { }); return p; }; }
-const qQuote = limiter(350), qHist = limiter(+E.HIST_GAP_MS || 1100);
+const qQuote = limiter(350), qHist = limiter(+E.HIST_GAP_MS || 1100), qMk = limiter(1200);
 async function call(path, body, q) {
   return q(async () => {
     for (let a = 0; a < 4; a++) {
@@ -88,7 +88,7 @@ async function loadMaster() {
     else if (x.exch_seg === 'NSE' && /-EQ$/.test(x.symbol)) eq[x.symbol.slice(0, -3)] = x;
     else if (it === 'AMXIDX') idx[(x.exch_seg + '|' + x.symbol).toUpperCase()] = x.token;
   }
-  all = null;
+  all = null; ST.groups = groups; ST.eq = eq;
   const uni = [], missing = [];
   for (const i of IDX) uni.push({ s: i.s, seg: 'IDX', ex: i.ex, tok: idx[(i.ex + '|' + i.look).toUpperCase()] || i.tok, oex: i.oex, opt: nearestOpts(groups, i.name, i.oex, 'OPTIDX') });
   let stocks = STK.slice();
@@ -102,7 +102,33 @@ async function loadMaster() {
   ST.uni = uni; ST.bySym = {}; ST.byTok = {};
   for (const u of uni) { ST.bySym[u.s] = u; ST.byTok[u.ex + '|' + u.tok] = u; }
   ST.missing = missing; ST.master = true;
+  for (const x of (ST.extras || [])) { try { addSymbol(x); } catch (e) { } }
   log('universe', uni.length, 'missing', missing.join(',') || 'none');
+}
+
+function addSymbol(name) {
+  const s = String(name || '').toUpperCase().replace(/[^A-Z0-9&-]/g, ''); if (!s) throw new Error('bad symbol');
+  if (ST.bySym[s]) return ST.bySym[s];
+  ST.extras = ST.extras || [];
+  if (!ST.extras.includes(s) && ST.extras.length >= (+E.MAX_EXTRA || 30)) throw new Error('extra symbol limit reached (' + (+E.MAX_EXTRA || 30) + ')');
+  const e = ST.eq && ST.eq[s]; if (!e) throw new Error(s + ' not found as an NSE equity');
+  const u = { s, seg: 'STK', ex: 'NSE', tok: e.token, oex: 'NFO', opt: nearestOpts(ST.groups, s, 'NFO', 'OPTSTK'), extra: true };
+  ST.uni.push(u); ST.bySym[s] = u; ST.byTok[u.ex + '|' + u.tok] = u; if (!ST.extras.includes(s)) ST.extras.push(s); log('added symbol', s); return u;
+}
+const MK = '/rest/secure/angelbroking/marketData/v1/';
+async function movers() {
+  if (ST.mv && Date.now() - ST.mv.at < (anyOpen() ? 60000 : 600000)) return ST.mv.data;
+  const und = ts => String(ts || '').replace(/\d{2}[A-Z]{3}\d{2}FUT$/, '').replace(/-EQ$/, '');
+  const jobs = [['gainers', 'gainersLosers', { datatype: 'PercPriceGainers', expirytype: 'NEAR' }], ['losers', 'gainersLosers', { datatype: 'PercPriceLosers', expirytype: 'NEAR' }],
+    ['oiGainers', 'gainersLosers', { datatype: 'PercOIGainers', expirytype: 'NEAR' }], ['oiLosers', 'gainersLosers', { datatype: 'PercOILosers', expirytype: 'NEAR' }],
+    ['longBuildup', 'OIBuildup', { datatype: 'Long Built Up', expirytype: 'NEAR' }], ['shortBuildup', 'OIBuildup', { datatype: 'Short Built Up', expirytype: 'NEAR' }],
+    ['shortCovering', 'OIBuildup', { datatype: 'Short Covering', expirytype: 'NEAR' }], ['longUnwinding', 'OIBuildup', { datatype: 'Long Unwinding', expirytype: 'NEAR' }]];
+  const out = { t: istNow(), lists: {}, errors: [] };
+  for (const [k, ep, body] of jobs) {
+    try { const d = await call(MK + ep, body, qMk); out.lists[k] = (Array.isArray(d) ? d : []).slice(0, 15).map(x => ({ s: und(x.tradingSymbol), ltp: +x.ltp || null, pct: +x.percentChange || 0, oi: +x.opnInterest || null, oiChg: +x.netChangeOpnInterest || null })); }
+    catch (e) { out.errors.push(k + ': ' + e.message); }
+  }
+  ST.mv = { at: Date.now(), data: out }; return out;
 }
 
 /* ---------- loops ---------- */
@@ -205,6 +231,8 @@ const server = http.createServer(async (req, res) => {
       case '/api/chain': { const s = p.get('sym'); ST.hot[s] = Date.now(); return send(req, res, 200, chainOut(ST.chains[s], 0) || {}); }
       case '/api/chains': { const out = {}; for (const s in ST.chains) out[s] = chainOut(ST.chains[s], 3); return send(req, res, 200, { chains: out }); }
       case '/api/optbars': { const x = ST.bySym[p.get('sym')]; if (!x) return send(req, res, 404, { error: 'unknown symbol' }); return send(req, res, 200, await optBars(x, +p.get('K'), p.get('type'))); }
+      case '/api/add': { try { const u = addSymbol(p.get('sym')); return send(req, res, 200, { ok: true, s: u.s }); } catch (e) { return send(req, res, 400, { error: e.message }); } }
+      case '/api/movers': return send(req, res, 200, await movers());
       case '/api/news': {
         const q = (p.get('q') || 'Nifty Sensex stock market').slice(0, 120), c = ST.news[q];
         if (c && Date.now() - c.at < 5 * 6e4) return send(req, res, 200, c.data);
