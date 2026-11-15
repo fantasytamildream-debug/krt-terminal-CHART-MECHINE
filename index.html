@@ -506,7 +506,7 @@ function scanSym(sym){const A=mtf(sym),st={};for(const k in SFN){if(!STRAT[k].se
   const bu=(sym.seg!=='STK'||isLive(sym))?'':ch>=0?(foi>=0?'Long buildup':'Short covering'):(foi>=0?'Short buildup':'Long unwinding');
   let jk=null;try{jk=jackScan(sym,A)}catch(e){}
   return{A,st,score:sc,bu,dc:dataCheck(sym,false),jk}}
-function scanAll(){for(const s of tradables())SCAN[s.s]=scanSym(s);computeTop();try{computeJackpot()}catch(e){console.error(e)}try{computeMood()}catch(e){console.error(e)}logSignals();try{evalTracks();aiTrackScan()}catch(e){console.error(e)}if(CFG.autoPaper)autoPaper();saveJ();saveX();WARM=true}
+function scanAll(){for(const s of tradables())SCAN[s.s]=scanSym(s);computeTop();try{computeJackpot()}catch(e){console.error(e)}try{computeMood()}catch(e){console.error(e)}try{scanBig()}catch(e){console.error(e)}logSignals();try{evalTracks();aiTrackScan()}catch(e){console.error(e)}if(CFG.autoPaper)autoPaper();saveJ();saveX();WARM=true}
 function computeTop(){const arr=SYMS.filter(s=>SCAN[s.s]&&SCAN[s.s].dc.ok).map(s=>{const r=SCAN[s.s],A=r.A,dir=r.score>0?'CE':'PE',sg=dir==='CE'?1:-1,a15=A['15m'];if(!a15.ok)return null;
     const en=ltp(s);let inv=sg>0?(a15.sup[0]??en-1.5*a15.atr):(a15.res[0]??en+1.5*a15.atr);let tg=sg>0?(A['1h'].res[0]??a15.res[0]??en+3*a15.atr):(A['1h'].sup[0]??a15.sup[0]??en-3*a15.atr);if(sg*(en-inv)<=0)inv=en-sg*1.5*a15.atr;if(sg*(tg-en)<=0)tg=en+sg*3*a15.atr;
     const pl=planOption(s,dir,en,inv,tg),agree=Object.entries(r.st).filter(([k,v])=>v.dir===dir&&(v.status==='SIGNAL'||v.status==='SETUP')).map(([k,v])=>k+(v.status==='SIGNAL'?'✓':'~'));
@@ -710,7 +710,7 @@ function evalTracks(){for(const tr of TRACK){if(tr.st!=='OPEN')continue;const s=
   if(tr.st==='OPEN'&&bars.length)tr.bt=last(bars).t}}
 
 /* AI direction: k-nearest historical analogs (walk-forward, no future data) */
-function analog(bars,H=8,K=30,bt=true){const n=bars.length;if(n<H+K*2+40)return null;const c=bars.map(b=>b.c),R=rsiArr(c),A=atrArr(bars),E=ema(c,20),hasV=bars.some(b=>b.v>0),F=new Array(n);
+function analog(bars,H=8,K=30,bt=true){const n=bars.length;K=Math.min(K,Math.floor((n-40-H)/2));if(K<12)return null;const c=bars.map(b=>b.c),R=rsiArr(c),A=atrArr(bars),E=ema(c,20),hasV=bars.some(b=>b.v>0),F=new Array(n);
   for(let i=25;i<n;i++){const a=(A[i]/c[i])||1e-9,va=hasV?avg(bars.slice(i-20,i).map(x=>x.v)):0;F[i]=[(c[i]/c[i-1]-1)/a,(c[i]/c[i-5]-1)/a/2.2,(c[i]/c[i-20]-1)/a/4.5,(R[i]-50)/15,(c[i]-E[i])/(A[i]||1e-9)/2,hasV&&va?clamp(Math.log((bars[i].v||1)/va),-2,2):0]}
   const proj=at=>{const q=F[at],d=[];for(let j=25;j+H<=at;j++){const f=F[j];let s=0;for(let k=0;k<6;k++){const z=q[k]-f[k];s+=z*z}d.push([s,j])}if(d.length<K*2)return null;d.sort((a,b)=>a[0]-b[0]);
     const fw=d.slice(0,K).map(x=>c[x[1]+H]/c[x[1]]-1).sort((a,b)=>a-b);return{up:fw.filter(x=>x>0).length/K,mean:avg(fw),p25:fw[Math.floor(K*.25)],p75:fw[Math.floor(K*.75)]}};
@@ -718,7 +718,7 @@ function analog(bars,H=8,K=30,bt=true){const n=bars.length;if(n<H+K*2+40)return 
   if(bt)for(let at=Math.max(25+K*2+H,n-1-H-80);at<=n-1-H;at++){const p=proj(at);if(!p||(p.up<.6&&p.up>.4))continue;tot++;const r=c[at+H]/c[at]-1;if((p.up>=.6&&r>0)||(p.up<=.4&&r<0))hits++}
   return Object.assign(cur,{H,K,bt:{hits,tot}})}
 const tfH={'3m':10,'5m':8,'15m':6,'1h':5,'1D':5,'1M':3};
-function analogFor(key,bars,tf){const lb=last(bars),k=key+'|'+tf+'|'+bars.length+'|'+(lb?lb.t:0);if(ANC[k]!==undefined)return ANC[k];const v=analog(bars.slice(-400),tfH[tf]||6);ANC[k]=v;const ks=Object.keys(ANC);if(ks.length>200)delete ANC[ks[0]];return v}
+function analogFor(key,bars,tf){const lb=last(bars),k=key+'|'+tf+'|'+bars.length+'|'+(lb?lb.t:0);if(ANC[k]!==undefined)return ANC[k];const v=analog(bars.slice(-400),tfH[tf]||6)||fallbackArrow(bars.slice(-400),tfH[tf]||6);ANC[k]=v;const ks=Object.keys(ANC);if(ks.length>200)delete ANC[ks[0]];return v}
 const aiDir=p=>!p?null:p.up>=.6?1:p.up<=.4?-1:0;
 function aiTrackScan(){for(const s of tradables()){const b=complete(getTF(s,'15m'));if(b.length<120)continue;const lt=last(b).t;if(AIPC[s.s]===lt)continue;AIPC[s.s]=lt;const key='A|'+s.s+'|'+lt;if(AITR.some(a=>a.key===key))continue;
     const p=analog(b.slice(-400),4,30,false);if(!p||!aiDir(p))continue;AITR.unshift({key,sym:s.s,t:lt,dir:aiDir(p),c0:last(b).c,H:4,up:p.up,st:'OPEN',feed:feedTag(s)});if(AITR.length>1500)AITR.pop()}
@@ -796,7 +796,7 @@ let DEC={},MOOD=null,MOVERS=null,MOVT=0,MOODPREV=ld('krt_mood','');
 function adxArr(b,n=14){let tr=0,pd=0,md=0,adx=0;const o=[{adx:0,pdi:0,mdi:0}];for(let i=1;i<b.length;i++){const up=b[i].h-b[i-1].h,dn=b[i-1].l-b[i].l,p=up>dn&&up>0?up:0,m=dn>up&&dn>0?dn:0,t=Math.max(b[i].h-b[i].l,Math.abs(b[i].h-b[i-1].c),Math.abs(b[i].l-b[i-1].c));
   if(i<=n){tr+=t;pd+=p;md+=m}else{tr=tr-tr/n+t;pd=pd-pd/n+p;md=md-md/n+m}const pdi=tr?100*pd/tr:0,mdi=tr?100*md/tr:0,dx=pdi+mdi?100*Math.abs(pdi-mdi)/(pdi+mdi):0;adx=i<=n?dx:(adx*(n-1)+dx)/n;o.push({adx,pdi,mdi})}return o}
 function wilson(p,n,z=1.645){if(!n)return[0,1];const d=1+z*z/n,c=p+z*z/(2*n),r=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return[Math.max(0,(c-r)/d),Math.min(1,(c+r)/d)]}
-const calib=pj=>pj?(pj.up*pj.K+5)/(pj.K+10):.5; // shrink the raw neighbour share toward 50% (10 pseudo-samples)
+const calib=pj=>!pj?.5:pj.fb?pj.up:(pj.up*pj.K+5)/(pj.K+10); // shrink the raw neighbour share toward 50% (10 pseudo-samples)
 const tfMin={'3m':3,'5m':5,'15m':15,'1h':60,'1D':375,'1M':7875};
 function horizonTxt(tf,H){const m=(tfMin[tf]||15)*H;return tf==='1D'?H+' days':tf==='1M'?H+' months':m>=60?(m/60).toFixed(m%60?1:0)+' h':m+' min'}
 // neighbour excursion stats (computed for the current bar only)
@@ -886,6 +886,50 @@ function toggleFS(){const w=$('#cvw');if(!w)return;const on=!w.classList.contain
   $('#fsb').textContent=on?'✕':'⛶';setTimeout(drawChart,80)}
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement){const w=$('#cvw');if(w&&w.classList.contains('fs')){w.classList.remove('fs');document.body.classList.remove('noscroll');const b=$('#fsb');if(b)b.textContent='⛶';setTimeout(drawChart,80)}}});
 
+/* ---------------- V4: BIG-PLAYER VOLUME · OPENING CANDLE · TRADE BOXES · AUTO GUIDE ---------------- */
+let SEENBIG=new Set(ld('krt_big',[]));
+const dTxt=t=>tDate(t)+' '+tHM(t);
+// volume spike = possible institutional ("big player") activity: volume ≥ 2.5× the 20-candle average AND the biggest of the last 20
+function bigPlayers(b){const o=[];if(!b.some(x=>x.v>0))return o;for(let i=20;i<b.length;i++){let s=0,mx=0;for(let k=i-20;k<i;k++){s+=b[k].v;if(b[k].v>mx)mx=b[k].v}const av=s/20;if(!av||b[i].v<2.5*av||b[i].v<mx)continue;
+  const x=b[i],rg=x.h-x.l||1e-9,cp=(x.c-x.l)/rg;o.push({i,t:x.t,ratio:x.v/av,side:cp>=.6?'BUY':cp<=.4?'SELL':'ABSORB',price:x.c,v:x.v})}return o}
+function firstCandle(sym){const b5=complete(getTF(sym,'5m')),cd=curDay(sym),f=b5.find(x=>x.t>=cd);return f?{h:f.h,l:f.l,o:f.o,c:f.c,t:f.t,v:f.v}:null}
+function scanBig(){for(const s of tradables()){if(!s.live&&!WARM)continue;const b=complete(getTF(s,'5m')).slice(-80),bp=bigPlayers(b),cd=curDay(s);
+  for(const x of bp){if(x.i<b.length-2||x.t<cd)continue;const key=s.s+'|'+x.t;if(SEENBIG.has(key))continue;SEENBIG.add(key);
+    notify('big',`🐋 Big ${x.side==='BUY'?'BUY':x.side==='SELL'?'SELL':'volume (absorption)'} in ${s.s} · ${dTxt(x.t)} · ${x.ratio.toFixed(1)}× avg vol @ ${fp(x.price)}`,s.s,WARM&&x.side!=='ABSORB')}}
+  sv('krt_big',[...SEENBIG].slice(-400))}
+// premium-chart trade setup for an option strike
+function optSetup(sym,K,type,ob){if(!ob.length)return null;const q=quoteFor(sym,K,type,ltp(sym)),entry=q.ask>0?q.ask:last(ob).c,half=Math.max(.05,(q.ask-q.bid)/2),want=type==='CE'?1:-1;
+  let D=DEC[sym.s+'|15m'];if(!D)try{D=decide(sym,'15m')}catch(e){}
+  if(D&&D.dir===want&&D.inv!=null){const sl=Math.max(.05,priceAt(sym,K,type,D.inv,q.iv)-half);if(sl<entry)return{entry,sl,tg:D.tgts.map(u=>Math.max(.05,priceAt(sym,K,type,u,q.iv)-half)),src:'Underlying plan: '+D.decision+' · SL = underlying '+fp(D.inv),against:false}}
+  const a=last(atrArr(ob))||entry*.1,sl=Math.max(.05,entry-1.2*a),R=entry-sl;
+  return{entry,sl,tg:[1,1.5,2,3,4].map(m=>entry+m*R),src:D&&D.dir===-want?'⚠ Against the AI direction ('+D.decision+') — ATR levels only':'ATR-based levels (no directional plan right now)',against:!!(D&&D.dir===-want)}}
+function tradeSetupFor(sym,all){if(!view.ov.tl)return null;if(view.opt)return optSetup(sym,view.opt.K,view.opt.type,complete(all));const D=DEC[sym.s+'|'+view.tf];if(!D||!D.dir||D.inv==null||D.decision==='AVOID')return null;return{entry:D.en,sl:D.inv,tg:D.tgts,src:D.decision,dir:D.dir}}
+function drawTradeBox(g,TS,x,y,W,AX,lo,hi,bw,nb){if(!TS)return;const dir=TS.dir||1,xs=Math.max(0,x(nb-1)-bw*6),xe=W-AX-2,yE=y(TS.entry),yS=y(TS.sl),yT=y(TS.tg[TS.tg.length-1]);
+  g.fillStyle='rgba(240,71,90,.16)';g.fillRect(xs,Math.min(yE,yS),xe-xs,Math.abs(yS-yE));g.fillStyle='rgba(31,199,122,.12)';g.fillRect(xs,Math.min(yE,yT),xe-xs,Math.abs(yT-yE));
+  const ln=(p,c,lab,w=1.4,dash=[])=>{if(p<lo||p>hi)return false;const yy=y(p);g.strokeStyle=c;g.lineWidth=w;g.setLineDash(dash);g.beginPath();g.moveTo(xs,yy);g.lineTo(xe,yy);g.stroke();g.setLineDash([]);g.lineWidth=1;g.font='bold 10.5px IBM Plex Mono, monospace';const tw=g.measureText(lab).width;g.fillStyle='#080b11cc';g.fillRect(xs+2,yy-12,tw+6,13);g.fillStyle=c;g.fillText(lab,xs+5,yy-2);return true};
+  const pc=p=>(p/TS.entry-1)*100;ln(TS.entry,'#e5e7eb','ENTRY '+fp(TS.entry),2,[4,3]);ln(TS.sl,'#ff5468','SL '+fp(TS.sl)+' ('+fmt(pc(TS.sl),1)+'%)',2);
+  let off=0;TS.tg.forEach((t,i)=>{if(!ln(t,'#22e08a','T'+(i+1)+' '+fp(t)+' ('+(pc(t)>=0?'+':'')+fmt(pc(t),1)+'%)'))off++});
+  if(off){g.font='bold 10px IBM Plex Mono, monospace';g.fillStyle='#22e08a';g.fillText('↑ '+off+' more target'+(off>1?'s':'')+' off-screen',xs+5,dir>0?12:y(lo)-4)}g.font='10px IBM Plex Mono, monospace'}
+// simple rule-based arrow when there isn't enough history for the pattern model
+function fallbackArrow(bars,H){const n=bars.length;if(n<30)return null;const c=bars.map(b=>b.c),e20=ema(c,20),e50=ema(c,Math.min(50,n-1)),R=rsiArr(c),m12=ema(c,12),m26=ema(c,26),mac=c.map((_,i)=>m12[i]-m26[i]),sg=ema(mac,9),A=last(atrArr(bars))||c[n-1]*.01;
+  let s=0;s+=c[n-1]>e20[n-1]?1:-1;s+=e20[n-1]>e50[n-1]?1:-1;s+=R[n-1]>55?1:R[n-1]<45?-1:0;s+=mac[n-1]>sg[n-1]?1:-1;s+=c[n-1]>c[n-4]?1:-1;
+  const up=.5+clamp(s*.025,-.12,.12),mv=(up-.5)*2*A/c[n-1]*H*.5;return{up,mean:mv,p25:mv-A/c[n-1]*1.2,p75:mv+A/c[n-1]*1.2,H,K:0,bt:{hits:0,tot:0},fb:true}}
+// plain-language guide built from the computed data (works without any AI key)
+function guideHTML(sym){const ta=view.aiLang==='ta',T=(e,t)=>ta?t:e,D=view.opt?null:DEC[sym.s+'|'+view.tf],L=periodLevels(sym),F=firstCandle(sym),px=ltp(sym),li=[];
+  if(view.opt){const ob=optBars(sym,view.opt.K,view.opt.type,view.tf),TS=optSetup(sym,view.opt.K,view.opt.type,complete(ob));if(TS)li.push(T(`<b>${sym.s} ${view.opt.K} ${view.opt.type}</b>: entry ₹${fp(TS.entry)}, SL ₹${fp(TS.sl)}, targets ${TS.tg.map((t,i)=>'T'+(i+1)+' ₹'+fp(t)).join(' · ')}. Source: ${esc(TS.src)}.`,`<b>${sym.s} ${view.opt.K} ${view.opt.type}</b>: entry ₹${fp(TS.entry)}, SL ₹${fp(TS.sl)}, targets ${TS.tg.map((t,i)=>'T'+(i+1)+' ₹'+fp(t)).join(' · ')}. ${TS.against?'⚠ Idhu AI direction-ku edhira — risk adhigam.':'Base: '+esc(TS.src)}`))}
+  if(D){const bu=Math.round(D.pUp*100);li.push(T(`<b>${D.tf} decision: ${D.decision}</b> — bullish ${bu}% / bearish ${100-bu}% over ${D.horizon} (${D.K||'trend'} ${D.K?'similar setups':'rules'}${D.bt&&D.bt.tot?', WF hit '+Math.round(D.bt.hits/D.bt.tot*100)+'%':''}). Quality ${D.grade}, risk ${D.risk}.`,`<b>${D.tf} decision: ${D.decision}</b> — mela poga ${bu}% / keezha poga ${100-bu}% chance, next ${D.horizon} (${D.K?D.K+' similar past setups':'trend rules'}). Quality ${D.grade}, risk ${D.risk}.`))}
+  if(F)li.push(T(`📍 1st 5-min candle (${tDate(F.t)} 09:15–09:20): <b>H ${fp(F.h)}</b> / <b>L ${fp(F.l)}</b> — price is ${px>F.h?'<span class="up">above the high</span>':px<F.l?'<span class="dn">below the low</span>':'inside the range'}.`,`📍 1st 5-min candle (${tDate(F.t)}): <b>High ${fp(F.h)}</b> / <b>Low ${fp(F.l)}</b> — ippo price ${px>F.h?'<span class="up">high-ku mela</span>':px<F.l?'<span class="dn">low-ku keezha</span>':'range-kulla'}.`));
+  if(L){const st=(n,v,hiSide)=>v==null?'':`${n} ${fp(v)} ${hiSide?(px>v?'✓':''):(px<v?'✓':'')}`;li.push(T(`Levels: ${[st('PDH',L.PDH,1),st('PWH',L.PWH,1),st('PMH',L.PMH,1)].join(' · ')} | ${[st('PDL',L.PDL),st('PWL',L.PWL),st('PML',L.PML)].join(' · ')} (✓ = broken).`,`Levels: ${[st('PDH',L.PDH,1),st('PWH',L.PWH,1),st('PMH',L.PMH,1)].join(' · ')} | ${[st('PDL',L.PDL),st('PWL',L.PWL),st('PML',L.PML)].join(' · ')} (✓ = break aachu).`))}
+  const bp=bigPlayers(complete(getTF(sym,'5m')).slice(-150)),lb=last(bp);
+  li.push(lb?T(`🐋 Last big-player volume: <b>${lb.side}</b> ${lb.ratio.toFixed(1)}× avg at ${dTxt(lb.t)} near ${fp(lb.price)} (${bp.length} spikes in recent 5m data).`,`🐋 Kadaisi big player volume: <b>${lb.side}</b> ${lb.ratio.toFixed(1)}× average, ${dTxt(lb.t)} @ ${fp(lb.price)}.`):T(sym.seg==='IDX'?'🐋 Index has no volume — watch heavyweight stocks / futures for big-player activity.':'🐋 No big-player volume spike in recent 5m candles.',sym.seg==='IDX'?'🐋 Index-ku volume illa — heavyweight stocks-la paarunga.':'🐋 Recent 5m candles-la big volume spike illa.'));
+  const ch=view.opt?null:chainNow(sym);if(ch&&!ch.model)li.push(T(`OI: CE wall ${ch.maxCE} (resistance), PE wall ${ch.maxPE} (support), PCR ${ch.pcr.toFixed(2)} → ${ch.pcr>=1.1?'put writers supportive':ch.pcr<=.9?'call writers heavy':'balanced'}.`,`OI: CE wall ${ch.maxCE} (resistance), PE wall ${ch.maxPE} (support), PCR ${ch.pcr.toFixed(2)} → ${ch.pcr>=1.1?'put writers support-la':ch.pcr<=.9?'call writers adhigam':'balance-aa irukku'}.`));
+  if(D&&D.best){const b=D.best;li.push(D.decision.startsWith('BUY')?T(`<b>Plan:</b> BUY ${sym.s} ${b.K} ${b.type} near ₹${fp(b.entry)}, SL ₹${fp(b.slP)} (underlying ${fp(D.inv)}), T1 ${fp(D.tgts[0])} → T3 ${fp(D.tgts[2])} on the underlying. Exit if a candle closes ${D.dir>0?'below':'above'} ${fp(D.inv)}.`,`<b>Plan:</b> ${sym.s} ${b.K} ${b.type} BUY ₹${fp(b.entry)} pakkam, SL ₹${fp(b.slP)} (underlying ${fp(D.inv)}). Candle ${D.dir>0?'keezha':'mela'} ${fp(D.inv)} close aana exit.`):T(`<b>Wait:</b> ${esc(D.why.filter(w=>w.startsWith('✗')||w.startsWith('No')).slice(0,2).join('; ')||'conditions not aligned')}.`,`<b>Wait pannunga:</b> ${esc(D.why.filter(w=>w.startsWith('✗')||w.startsWith('No')).slice(0,2).join('; ')||'conditions match aagala')}.`))}
+  if(MOOD)li.push(T(`Market mood ${MOOD.light.toUpperCase()} (${MOOD.score}); NIFTY next 30 min ${MOOD.p>=.55?'▲':MOOD.p<=.45?'▼':'◆'} ${Math.round(Math.max(MOOD.p,1-MOOD.p)*100)}%.`,`Market mood ${MOOD.light==='green'?'🟢 bullish':MOOD.light==='red'?'🔴 bearish':'🟡 neutral'} (${MOOD.score}); NIFTY next 30 min ${MOOD.p>=.55?'▲ mela':MOOD.p<=.45?'▼ keezha':'◆ clear illa'}.`));
+  return`<ul class="small" style="margin:6px 0;padding-left:18px">${li.map(x=>`<li style="margin:3px 0">${x}</li>`).join('')}</ul><div class="note">${T('Auto guide from the live numbers above — paper-trading analysis, not advice.','Mela irukura live numbers vachu auto guide — paper trading-ku mattum, advice illa.')}</div>`}
+function bigHTML(sym){const b=complete(getTF(sym,view.tf==='3m'||view.tf==='5m'||view.tf==='15m'?view.tf:'5m')).slice(-200),bp=bigPlayers(b).slice(-8).reverse();
+  return`<h3>🐋 Big-player volume <span class="mu small" style="text-transform:none">(${b.length?view.tf==='3m'||view.tf==='15m'?view.tf:'5m':''} candles)</span></h3>${bp.length?`<table><tr><th>Date · time</th><th>Side</th><th>Vol</th><th>Price</th></tr>${bp.map(x=>`<tr><td>${dTxt(x.t)}</td><td class="${x.side==='BUY'?'up':x.side==='SELL'?'dn':'ac'}">${x.side}</td><td class="ac">${x.ratio.toFixed(1)}×</td><td>${fp(x.price)}</td></tr>`).join('')}</table>`:`<div class="mu small">${sym.seg==='IDX'?'Index candles have no volume.':'No spike ≥ 2.5× average in recent candles.'}</div>`}
+  <div class="note">Orange volume bars on the chart mark a spike: volume ≥ 2.5× the 20-candle average and the largest of the last 20. Side comes from where the candle closed in its range (top 40% = BUY, bottom 40% = SELL, middle = absorption). A spike suggests large participants are active; it does not prove who traded.</div>`}
+
 /* ---------------- UI STATE ---------------- */
 const view={tab:'mkt',sym:'TMPV',tf:'15m',opt:null,seg:'STK',filt:'all',q:'',bw:9,off:0,sel:null,aiLang:'en',ov:{ema:true,vwap:true,sr:true,fvg:false,sw:false,orb:true,prof:true,lv:true,ai:true,tl:true}};
 function go(tab){view.tab=tab;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));render();window.scrollTo(0,0)}
@@ -916,7 +960,8 @@ function pickFor(sym){const r=SCAN[sym.s];if(!r)return null;const A=r.A,a15=A['1
 function renderChartTab(m){const sym=SYM[view.sym];
   m.innerHTML=`<div id="chh"></div><div class="chips" id="tfc"></div><div class="cvwrap" id="cvw"><canvas id="cv"></canvas><div class="legend" id="lg"></div><div class="zoom"><button data-z="-1">−</button><button data-z="1">+</button><button data-z="0">⟲</button><button id="fsb" data-act="fs" title="Full screen">⛶</button></div><div class="fstf" id="fstf"></div></div>
   <div class="chips" id="ovc" style="margin-top:6px"></div>
-  <div class="card"><h3>AI chart analysis <span class="flex" style="margin-left:auto;gap:4px"><button data-lang="en" class="${view.aiLang==='en'?'on':''}">EN</button><button data-lang="ta" class="${view.aiLang==='ta'?'on':''}">தமிழ்</button></span></h3><button id="aiBtn" data-act="ai" style="width:100%">Run AI analysis on all timeframes</button><div id="aiOut" class="ai" style="margin-top:8px"></div></div>
+  <div class="card"><h3>🤖 AI guide <span class="flex" style="margin-left:auto;gap:4px"><button data-lang="en" class="${view.aiLang==='en'?'on':''}">EN</button><button data-lang="ta" class="${view.aiLang==='ta'?'on':''}">தமிழ்</button></span></h3><div id="aiGuide" class="ai"></div><button id="aiBtn" data-act="ai" style="width:100%;margin-top:6px">Run AI analysis on all timeframes</button><div id="aiOut" class="ai" style="margin-top:8px"></div></div>
+  <div class="card" id="bigc"></div>
   <div class="card"><h3>News · ${esc(sym.n)}</h3><div id="symNews"></div></div>
   <div class="card" id="decc"></div>
   <div class="grid2"><div><div class="card" id="mtfc"></div><div class="card" id="pick"></div></div><div><div class="card" id="chainc"></div><div class="card" id="stc"></div></div></div>`;
@@ -931,6 +976,7 @@ function renderChartHead(){const sym=SYM[view.sym],l=ltp(sym),c=chgPct(sym);let 
   $('#ovc').innerHTML=Object.entries({ai:'AI arrow',tl:'Trade lines',lv:'PD/PW/PM levels',ema:'EMA 20/50',vwap:'VWAP',sr:'S/R',fvg:'FVG',sw:'Swings',orb:'ORB',prof:'Profile'}).map(([k,n])=>`<button data-ov="${k}" class="${view.ov[k]?'on':''}">${n}</button>`).join('')}
 function renderChartPanels(){if(!$('#chh'))return;renderChartHead();const sym=SYM[view.sym];if(!SCAN[sym.s])SCAN[sym.s]=scanSym(sym);const r=SCAN[sym.s],A=view.opt?mtfOpt():r.A;
   {let D=null;try{D=view.opt?null:decide(sym,view.tf)}catch(e){console.error(e)}$('#decc').innerHTML=view.opt?'<h3>🧭 AI decision</h3><div class="mu small">Open the underlying chart for the full decision dashboard.</div>':decisionHTML(D,sym)}
+  try{$('#aiGuide').innerHTML=guideHTML(sym);$('#bigc').innerHTML=bigHTML(sym)}catch(e){console.error(e)}
   $('#mtfc').innerHTML=`<h3>Multi-timeframe analysis${view.opt?' · option premium':''}</h3><table><tr><th>TF</th><th>Trend</th><th>Structure</th><th>RSI</th><th>Break</th><th>Bias</th></tr>${TFS.map(tf=>{const a=A[tf];if(!a||!a.ok)return`<tr><td>${tf}</td><td colspan=5 class="mu t">not enough data</td></tr>`;
     return`<tr data-tf="${tf}" style="cursor:pointer"><td>${tf}</td><td class="${a.trend==='Up'?'up':a.trend==='Down'?'dn':'mu'}">${a.trend}</td><td class="${a.structure==='Bullish'?'up':a.structure==='Bearish'?'dn':'mu'}">${a.structure}</td><td>${a.rsi.toFixed(0)}</td><td class="${a.brk?a.brk.t==='BREAKOUT'?'up':'dn':'mu'}">${a.brk?(a.brk.t==='BREAKOUT'?'▲ ':'▼ ')+fp(a.brk.lvl)+(a.brk.fresh?'*':''):'—'}</td><td class="${a.bias>0?'up':a.bias<0?'dn':'mu'}">${a.bl}</td></tr>
     <tr><td></td><td colspan=5 class="t small mu" style="padding-top:0">${a.pat?'<span class="ac">'+a.pat.n+'</span> · ':''}S: ${a.sup.map(fp).join(', ')||'—'} · R: ${a.res.map(fp).join(', ')||'—'}${a.rv?' · Vol '+a.rv.toFixed(1)+'×':''}</td></tr>`}).join('')}</table><div class="note">Completed candles only. * = fresh break on the last closed candle. Swings confirm after 2 closed candles.</div>`;
@@ -975,24 +1021,23 @@ function drawChart(){const cv=$('#cv');if(!cv)return;const sym=SYM[view.sym],dpr
   const intr=!!TFM[view.tf],AX=58,bw=view.bw,nVis=Math.max(10,Math.floor((W-AX-6)/bw)-(pj?pj.H+3:0)),end=Math.max(1,all.length-view.off),start=Math.max(0,end-nVis),vis=all.slice(start,end);
   const cAll=all.map(b=>b.c),e20=ema(cAll,20),e50=ema(cAll,50),vw=intr?vwapArr(all):null;
   const comp=complete(all),an=analyze(comp.slice(-300));const pr=(!view.opt&&sym.seg==='MCX'&&view.ov.prof&&intr)?profileOf(sym,STRAT.MF.p.lookback):null;
-  let hi=Math.max(...vis.map(b=>b.h)),lo=Math.min(...vis.map(b=>b.l));if(pj&&compA.length){const lc=last(compA).c;hi=Math.max(hi,lc*(1+pj.p75),lc*(1+pj.mean));lo=Math.min(lo,lc*(1+pj.p25),lc*(1+pj.mean))}const pad=(hi-lo)*.06||hi*.01;hi+=pad;lo-=pad;
+  let hi=Math.max(...vis.map(b=>b.h)),lo=Math.min(...vis.map(b=>b.l));if(pj&&compA.length){const lc=last(compA).c;hi=Math.max(hi,lc*(1+pj.p75),lc*(1+pj.mean));lo=Math.min(lo,lc*(1+pj.p25),lc*(1+pj.mean))}const TS=view.off===0?tradeSetupFor(sym,all):null;if(TS){const t3=TS.tg[Math.min(2,TS.tg.length-1)];hi=Math.max(hi,TS.entry,TS.sl,t3);lo=Math.min(lo,TS.entry,TS.sl,t3)}const pad=(hi-lo)*.06||hi*.01;hi+=pad;lo-=pad;
   const pH=H*.8,vTop=H*.82,vH=H*.16,y=p=>6+(hi-p)/(hi-lo)*(pH-12),x=i=>i*bw+bw/2+2;
   g.font='10px IBM Plex Mono, monospace';g.strokeStyle='#1a2130';g.fillStyle='#5f6b80';g.lineWidth=1;
   for(let i=0;i<=5;i++){const p=lo+(hi-lo)*i/5,yy=y(p);g.beginPath();g.moveTo(0,yy);g.lineTo(W-AX,yy);g.stroke();g.fillText(fp(p),W-AX+4,yy+3)}
   const vmax=Math.max(...vis.map(b=>b.v))||1;
   // levels
   const usedY=[],hl=(p,col,lab,dash=[4,4])=>{if(p==null||p<lo||p>hi)return;const yy=y(p);g.setLineDash(dash);g.strokeStyle=col;g.beginPath();g.moveTo(0,yy);g.lineTo(W-AX,yy);g.stroke();g.setLineDash([]);if(usedY.some(u=>Math.abs(u-yy)<12))return;usedY.push(yy);g.fillStyle=col;g.fillText(lab,W-AX-g.measureText(lab).width-4,yy-3)};
-  {const D=!view.opt&&view.ov.tl?DEC[sym.s+'|'+view.tf]:null;if(D&&D.dir&&D.decision!=='AVOID'&&D.inv!=null){g.lineWidth=1.4;hl(D.en,'#e5e7eb','ENTRY '+fp(D.en),[3,3]);hl(D.inv,'#ff5468','SL '+fp(D.inv),[]);D.tgts.slice(0,3).forEach((t,i)=>hl(t,'#22e08a','T'+(i+1)+' '+fp(t),[6,3]));g.lineWidth=1}}
 
   if(view.ov.sr&&an.ok){an.res.forEach((p,i)=>hl(p,'#d0505f','R'+(i+1)+' '+fp(p)));an.sup.forEach((p,i)=>hl(p,'#2fae6e','S'+(i+1)+' '+fp(p)))}
   if(pr){hl(pr.poc,'#f5b301','POC '+fp(pr.poc),[2,2]);hl(pr.vah,'#a78bfa','VAH '+fp(pr.vah));hl(pr.val,'#a78bfa','VAL '+fp(pr.val))}
-  if(!view.opt&&view.ov.orb&&intr&&TFM[view.tf]<=15){const t5=todayOf(sym,complete(getTF(sym,'5m')));if(t5.length){const o=t5[0];const i0=vis.findIndex(b=>b.t>=o.t);if(i0>=0){g.strokeStyle='#4c8dff';g.setLineDash([6,3]);[o.h,o.l].forEach(p=>{if(p<lo||p>hi)return;g.beginPath();g.moveTo(x(i0),y(p));g.lineTo(W-AX,y(p));g.stroke()});g.setLineDash([]);g.fillStyle='#4c8dff';g.fillText('ORH',x(i0)+2,y(o.h)-3);g.fillText('ORL',x(i0)+2,y(o.l)+11)}}}
+  if(!view.opt&&view.ov.orb&&intr&&TFM[view.tf]<=15){const t5=todayOf(sym,complete(getTF(sym,'5m')));if(t5.length){const o=t5[0];const i0=vis.findIndex(b=>b.t>=o.t);if(i0>=0){g.strokeStyle='#4c8dff';g.setLineDash([6,3]);[o.h,o.l].forEach(p=>{if(p<lo||p>hi)return;g.beginPath();g.moveTo(x(i0),y(p));g.lineTo(W-AX,y(p));g.stroke()});g.setLineDash([]);g.fillStyle='#4c8dff';g.font='bold 10px IBM Plex Mono, monospace';g.fillText('1st 5m H '+fp(o.h),x(i0)+2,y(o.h)-3);g.fillText('1st 5m L '+fp(o.l),x(i0)+2,y(o.l)+11);g.font='10px IBM Plex Mono, monospace'}}}
   if(!view.opt&&view.ov.lv){const PL=periodLevels(sym);if(PL)[['PDH',PL.PDH,'#22d3ee'],['PDL',PL.PDL,'#22d3ee'],['PWH',PL.PWH,'#f59e0b'],['PWL',PL.PWL,'#f59e0b'],['PMH',PL.PMH,'#e879f9'],['PML',PL.PML,'#e879f9']].forEach(([n,p,c])=>{if(p==null||p<lo||p>hi)return;const yy=y(p);g.setLineDash([9,3]);g.strokeStyle=c;g.lineWidth=1.2;g.beginPath();g.moveTo(0,yy);g.lineTo(W-AX,yy);g.stroke();g.setLineDash([]);g.lineWidth=1;g.fillStyle=c;g.fillText(n+' '+fp(p),4,yy-3)})}
   // FVG
   if(view.ov.fvg){let cnt=0;for(let i=vis.length-1;i>=2&&cnt<6;i--){const a=vis[i-2],c=vis[i];let box=null;if(a.h<c.l)box=[a.h,c.l,'rgba(31,199,122,.13)'];else if(a.l>c.h)box=[c.h,a.l,'rgba(240,71,90,.13)'];if(!box)continue;
     let filled=false;for(let k=i+1;k<vis.length;k++){if(box[2].includes('31')?vis[k].c<box[0]:vis[k].c>box[1]){filled=true;break}}if(filled)continue;cnt++;g.fillStyle=box[2];g.fillRect(x(i-1)-bw/2,y(box[1]),W-AX-(x(i-1)-bw/2),Math.max(1,y(box[0])-y(box[1])))}}
   // volume + candles
-  vis.forEach((b,i)=>{const up=b.c>=b.o,col=up?'#1fc77a':'#f0475a',xx=x(i);g.globalAlpha=b.partial?.5:1;g.fillStyle=up?'rgba(31,199,122,.35)':'rgba(240,71,90,.35)';const vh=b.v/vmax*vH;g.fillRect(xx-bw*.35,vTop+vH-vh,bw*.7,vh);
+  const BIG=new Map(bigPlayers(compA.slice(-700)).map(z=>[z.t,z]));vis.forEach((b,i)=>{const up=b.c>=b.o,col=up?'#1fc77a':'#f0475a',xx=x(i),bg=BIG.get(b.t);g.globalAlpha=b.partial?.5:1;g.fillStyle=bg?'#ff8c00':up?'rgba(31,199,122,.35)':'rgba(240,71,90,.35)';const vh=b.v/vmax*vH;g.fillRect(xx-bw*.35,vTop+vH-vh,bw*.7,vh);
     g.strokeStyle=col;g.beginPath();g.moveTo(xx,y(b.h));g.lineTo(xx,y(b.l));g.stroke();g.fillStyle=col;const bt=y(Math.max(b.o,b.c)),bh=Math.max(1,Math.abs(y(b.o)-y(b.c)));if(b.partial){g.strokeRect(xx-bw*.33,bt,bw*.66,bh)}else g.fillRect(xx-bw*.33,bt,bw*.66,bh);g.globalAlpha=1});
   const line=(arr,col,dash)=>{g.strokeStyle=col;g.setLineDash(dash||[]);g.beginPath();let st=false;vis.forEach((b,i)=>{const v=arr[start+i];if(v==null)return;const yy=y(v);if(yy<0||yy>pH){st=false;return}st?g.lineTo(x(i),yy):g.moveTo(x(i),yy);st=true});g.stroke();g.setLineDash([])};
   if(view.ov.ema){g.lineWidth=1.3;line(e20,'#f5b301');line(e50,'#4c8dff');g.lineWidth=1}
@@ -1003,6 +1048,8 @@ function drawChart(){const cv=$('#cv');if(!cv)return;const sym=SYM[view.sym],dpr
     const y0=y(lc),ye=y(lc*(1+pj.mean));g.strokeStyle=col;g.lineWidth=3.4;g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,ye);g.stroke();g.lineWidth=1;
     const an=Math.atan2(ye-y0,x1-x0);g.beginPath();g.moveTo(x1,ye);g.lineTo(x1-17*Math.cos(an-.45),ye-17*Math.sin(an-.45));g.lineTo(x1-17*Math.cos(an+.45),ye-17*Math.sin(an+.45));g.closePath();g.fillStyle=col;g.fill();
     g.font='bold 14px IBM Plex Mono, monospace';g.fillStyle=col;g.fillText((d>0?'AI ▲ ':d<0?'AI ▼ ':'AI ◆ ')+Math.round((d<0?1-pj.up:pj.up)*100)+'%',Math.max(4,Math.min(x1-58,W-AX-70)),Math.max(14,Math.min(pH-4,ye+(d>0?-9:16))));g.font='10px IBM Plex Mono, monospace'}
+  {g.font='bold 9.5px IBM Plex Mono, monospace';vis.forEach((b,i)=>{const z=BIG.get(b.t);if(!z)return;const tx=z.side==='BUY'?'🐋▲':z.side==='SELL'?'🐋▼':'🐋';g.fillStyle='#ff8c00';g.fillText(tx,x(i)-8,Math.max(10,y(b.h)-6))});g.font='10px IBM Plex Mono, monospace'}
+  drawTradeBox(g,TS,x,y,W,AX,lo,hi,bw,vis.length);
   // time labels
   g.fillStyle='#5f6b80';const every=Math.max(1,Math.round(70/bw));vis.forEach((b,i)=>{if(i%every)return;g.fillText(intr?tHM(b.t):view.tf==='1M'?tDate(b.t).split(' ')[1]+' '+String(new Date(b.t).getUTCFullYear()).slice(2):tDate(b.t),x(i)-14,H-2)});
   // last price
@@ -1011,7 +1058,7 @@ function drawChart(){const cv=$('#cv');if(!cv)return;const sym=SYM[view.sym],dpr
   let sel=vis[vis.length-1];if(view.sel){const i=Math.floor((view.sel.x-2)/bw);if(vis[i]){sel=vis[i];g.strokeStyle='#ffffff33';g.beginPath();g.moveTo(x(i),0);g.lineTo(x(i),H);g.stroke()}}
   $('#lg').innerHTML=`${view.opt?sym.s+' '+view.opt.K+' '+view.opt.type:sym.s} · ${view.tf} ${intr?tDate(sel.t)+' '+tHM(sel.t):tDate(sel.t)}${sel.partial?' <span class="ac">forming</span>':''}<br>O ${fp(sel.o)} H ${fp(sel.h)} L ${fp(sel.l)} C <span class="${sel.c>=sel.o?'up':'dn'}">${fp(sel.c)}</span> V ${compact(sel.v)}`+
     (view.ov.ema?`<br><span class="ac">EMA20 ${fp(e20[e20.length-1])}</span> <span style="color:#4c8dff">EMA50 ${fp(e50[e50.length-1])}</span>${vw?` <span style="color:#a78bfa">VWAP ${fp(last(vw))}</span>`:''}`:'');
-  if(pj){const d=aiDir(pj);$('#lg').innerHTML+=`<br><span style="color:${d>0?'#1fc77a':d<0?'#f0475a':'#9aa4b8'}">AI arrow: ${d>0?'▲ up':d<0?'▼ down':'no clear edge'} · ${Math.round(pj.up*100)}% of ${pj.K} similar past setups rose · avg ${fmt(pj.mean*100,2)}% in ${pj.H} bars · WF hit ${pj.bt.tot?Math.round(pj.bt.hits/pj.bt.tot*100)+'% ('+pj.bt.tot+')':'n/a'}</span>`}}
+  if(pj){const d=aiDir(pj);$('#lg').innerHTML+=`<br><span style="color:${d>0?'#1fc77a':d<0?'#f0475a':'#9aa4b8'}">AI arrow: ${d>0?'▲ up':d<0?'▼ down':'no clear edge'} · ${pj.fb?Math.round(pj.up*100)+'% (trend rules — not enough history for the pattern model)':Math.round(pj.up*100)+'% of '+pj.K+' similar past setups rose'} · avg ${fmt(pj.mean*100,2)}% in ${pj.H} bars · WF hit ${pj.bt.tot?Math.round(pj.bt.hits/pj.bt.tot*100)+'% ('+pj.bt.tot+')':'n/a'}</span>`}}
 
 /* ---------- CALLS TAB ---------- */
 function renderCalls(m){const card=(x,i)=>{const s=x.s,p=x.pl.best||x.pl.top,c=chgPct(s);return`<div class="card callcard ${x.dir==='PE'?'pe':''}"><div class="flex"><b>#${i+1} ${s.s}</b><span class="mono">${fp(ltp(s))}</span><span class="mono small ${cls(c)}">${pct(c)}</span><span class="mono small mu" style="margin-left:auto">score ${x.score.toFixed(1)}</span></div>
@@ -1069,7 +1116,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data
   if(d.tf){view.tf=d.tf;view.off=0;view.sel=null;renderChartPanels();return drawChart()}if(d.ov){view.ov[d.ov]=!view.ov[d.ov];renderChartHead();return drawChart()}
   if(d.z){const z=+d.z;view.bw=z===0?9:clamp(view.bw+z*2,3,25);if(z===0){view.off=0;view.sel=null}return drawChart()}
   if(d.optk){view.opt={K:+d.optk,type:d.optt};view.off=0;view.sel=null;renderChartPanels();return drawChart()}
-  if(d.lang){view.aiLang=d.lang;document.querySelectorAll('[data-lang]').forEach(b=>b.classList.toggle('on',b.dataset.lang===d.lang));return}
+  if(d.lang){view.aiLang=d.lang;document.querySelectorAll('[data-lang]').forEach(b=>b.classList.toggle('on',b.dataset.lang===d.lang));try{$('#aiGuide').innerHTML=guideHTML(SYM[view.sym])}catch(e){}return}
   if(d.paper){const[s,k,dir]=d.paper.split('|'),sym=SYM[s];let plan,meta={};if(k==='JACKPOT'){const x=JACK.ce.concat(JACK.pe).find(z=>z.s.s===s&&z.dir===dir);plan=x&&x.plan;meta={setupId:'J'+curDay(sym)}}else if(k==='CALLS'){const x=TOP.ce.concat(TOP.pe).find(z=>z.s.s===s&&z.dir===dir)||{pl:pickFor(sym).pl};plan=x.pl;meta={setupId:'C'+S.clock}}else{const x=SCAN[s].st[k];plan=x.plan;meta=x}
     const msg=plan?openPaper(sym,k,plan,dir,meta):'Setup changed — refresh';t.textContent=msg;t.disabled=true;return}
   if(d.uncsv){const s=SYM[d.uncsv];delete s.csv;s.ver=(s.ver||0)+1;CACHE.clear();SCAN[s.s]=scanSym(s);return renderSettings($('#main'))}
