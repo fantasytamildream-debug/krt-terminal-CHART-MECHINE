@@ -2,7 +2,7 @@
    Zero dependencies (Node 18+). Reads market data only — it never places orders.
    Env: ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN (MPIN), ANGEL_TOTP_SECRET, ACCESS_KEY, ALLOW_ORIGIN, [ALL_FNO=true], [M1_DAYS=5] */
 'use strict';
-const http = require('http'), crypto = require('crypto'), zlib = require('zlib');
+const http = require('http'), crypto = require('crypto'), zlib = require('zlib'), fs = require('fs'), path = require('path');
 const E = process.env, PORT = E.PORT || 10000, API = E.ANGEL_BASE || 'https://apiconnect.angelone.in';
 const ACCESS = E.ACCESS_KEY || '', ORIGIN = E.ALLOW_ORIGIN || '*', M1_DAYS = +E.M1_DAYS || 5, ALL_FNO = /^(1|true|yes)$/i.test(E.ALL_FNO || '');
 const MASTER_URL = E.MASTER_URL || 'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json';
@@ -41,19 +41,20 @@ async function login() {
   ST.jwt = j.data.jwtToken; ST.loggedIn = true; ST.error = ''; log('Angel login OK');
 }
 function limiter(gap) { let last = 0, chain = Promise.resolve(); return fn => { const p = chain.then(async () => { const w = last + gap - Date.now(); if (w > 0) await sleep(w); last = Date.now(); return fn(); }); chain = p.catch(() => { }); return p; }; }
-const qQuote = limiter(230), qHist = limiter(400);
+const qQuote = limiter(350), qHist = limiter(+E.HIST_GAP_MS || 1100);
 async function call(path, body, q) {
   return q(async () => {
-    for (let a = 0; a < 2; a++) {
+    for (let a = 0; a < 4; a++) {
       if (!ST.jwt) await login();
       const r = await fetch(API + path, { method: 'POST', headers: hdr(true), body: JSON.stringify(body) });
       const txt = await r.text(); let j;
+      if (/exceeding access rate|rate limit|too many/i.test(txt) || r.status === 429) { ST.rateHits = (ST.rateHits || 0) + 1; await sleep(2500 * (a + 1)); continue; }
       try { j = JSON.parse(txt); } catch (e) { throw new Error('HTTP ' + r.status + ' ' + txt.slice(0, 120)); }
       if (j.status === false && /AG800[123]|invalid token|token expired/i.test((j.errorcode || '') + ' ' + (j.message || ''))) { ST.jwt = null; continue; }
       if (j.status === false) throw new Error((j.message || 'error') + ' ' + (j.errorcode || ''));
       return j.data;
     }
-    throw new Error('re-login did not help');
+    throw new Error('Angel rate limit / re-login retries exhausted');
   });
 }
 const QUOTE = '/rest/secure/angelbroking/market/v1/quote/';
@@ -157,8 +158,8 @@ async function barLoop() {
       try {
         const b = ST.bars[u.s], now = istNow();
         if (!b) {
-          const d1 = await hist(u.ex, u.tok, 'ONE_DAY', now - 420 * 864e5, now);
           const m1 = await hist(u.ex, u.tok, 'ONE_MINUTE', now - (M1_DAYS + 6) * 864e5, now);
+          const d1 = await hist(u.ex, u.tok, 'ONE_DAY', now - 420 * 864e5, now);
           ST.bars[u.s] = { d1, m1: trimDays(m1, M1_DAYS), at: Date.now(), upd: now };
         } else if (mktOpen(u.seg) && Date.now() - b.at > 45000) {
           const from = b.m1.length ? b.m1[b.m1.length - 1][0] - 2 * 6e4 : now - 864e5;
@@ -187,11 +188,17 @@ const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, 'http://x');
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': ORIGIN, 'Access-Control-Allow-Headers': '*' }); return res.end(); }
-    if (u.pathname === '/' || u.pathname === '/health') return send(req, res, 200, { ok: true, service: 'krt-backend', loggedIn: ST.loggedIn, error: ST.error });
+    if (u.pathname === '/health') return send(req, res, 200, { ok: true, service: 'krt-backend', loggedIn: ST.loggedIn, error: ST.error });
+    if (u.pathname === '/' || u.pathname === '/index.html') {
+      const f = [path.join(__dirname, 'index.html'), path.join(__dirname, '..', 'index.html')].find(p => fs.existsSync(p));
+      if (!f) return send(req, res, 200, { ok: true, service: 'krt-backend', loggedIn: ST.loggedIn, error: ST.error, note: 'index.html not found next to the backend' });
+      const html = fs.readFileSync(f, 'utf8').replace('</head>', `<script>window.KRT_SAME_ORIGIN=1;window.KRT_NEEDS_KEY=${ACCESS ? 1 : 0};</script></head>`);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); return res.end(html);
+    }
     if (ACCESS && (u.searchParams.get('key') || req.headers['x-access-key']) !== ACCESS) return send(req, res, 401, { error: 'wrong access key' });
     const p = u.searchParams;
     switch (u.pathname) {
-      case '/api/status': return send(req, res, 200, { ok: true, loggedIn: ST.loggedIn, error: ST.error, master: ST.master, universe: ST.uni.length, barsLoaded: Object.keys(ST.bars).length, chains: Object.keys(ST.chains).length, missing: ST.missing, quotesAt: ST.qt, marketOpen: anyOpen(), serverTime: istNow(), errors: ST.errors.slice(0, 10) });
+      case '/api/status': return send(req, res, 200, { ok: true, loggedIn: ST.loggedIn, error: ST.error, master: ST.master, universe: ST.uni.length, barsLoaded: Object.keys(ST.bars).length, rateLimitRetries: ST.rateHits || 0, chains: Object.keys(ST.chains).length, missing: ST.missing, quotesAt: ST.qt, marketOpen: anyOpen(), serverTime: istNow(), errors: ST.errors.slice(0, 10) });
       case '/api/universe': return send(req, res, 200, { items: ST.uni.map(x => ({ s: x.s, seg: x.seg, ex: x.ex, lot: x.opt ? x.opt.lot : null, step: x.opt ? x.opt.step : null, exp: x.opt ? x.opt.exp : null, hasOptions: !!x.opt, optName: x.opt ? x.opt.name : null, px: ST.quotes[x.s] ? ST.quotes[x.s].ltp : null })) });
       case '/api/quotes': return send(req, res, 200, { t: ST.qt, q: ST.quotes });
       case '/api/bars': { const since = +p.get('since') || 0, out = {}; for (const s in ST.bars) { const b = ST.bars[s], m1 = since ? b.m1.filter(r => r[0] >= since) : b.m1; if (since && !m1.length) continue; out[s] = since ? { m1 } : { m1, d1: b.d1 }; } return send(req, res, 200, { t: istNow(), bars: out, loaded: Object.keys(ST.bars).length, total: ST.uni.length }); }
