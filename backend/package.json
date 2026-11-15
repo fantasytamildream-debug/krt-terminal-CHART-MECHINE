@@ -1,0 +1,8 @@
+{
+  "name": "krt-backend",
+  "version": "1.0.0",
+  "description": "Live Angel One SmartAPI data relay for KRT Terminal (market data only, no orders)",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js" }
+}
