@@ -23,7 +23,7 @@ const STK = ['MCX', 'NYKAA', 'PAYTM', 'PNB', 'SONACOMS', 'PHOENIXLTD', 'KALYANKJ
 const MCXL = [{ s: 'GOLDM', alt: 'GOLD' }, { s: 'SILVERM', alt: 'SILVER' }, { s: 'CRUDEOILM', alt: 'CRUDEOIL' }, { s: 'NATGASMINI', alt: 'NATURALGAS' }];
 
 /* ---------- state ---------- */
-const ST = { jwt: null, loggedIn: false, error: '', uni: [], bySym: {}, byTok: {}, quotes: {}, qt: 0, chains: {}, bars: {}, opt: {}, hot: {}, errors: [], missing: [], oi0: {}, oiDay: 0, master: false };
+const ST = { jwt: null, loggedIn: false, error: '', uni: [], bySym: {}, byTok: {}, quotes: {}, qt: 0, chains: {}, bars: {}, opt: {}, hot: {}, errors: [], missing: [], oi0: {}, oiDay: 0, master: false, news: {} };
 function err(m) { ST.errors.unshift(new Date().toISOString() + ' ' + m); ST.errors.length = Math.min(ST.errors.length, 25); log('ERR', m); }
 
 /* ---------- TOTP (RFC 6238) ---------- */
@@ -198,13 +198,34 @@ const server = http.createServer(async (req, res) => {
     if (ACCESS && (u.searchParams.get('key') || req.headers['x-access-key']) !== ACCESS) return send(req, res, 401, { error: 'wrong access key' });
     const p = u.searchParams;
     switch (u.pathname) {
-      case '/api/status': return send(req, res, 200, { ok: true, loggedIn: ST.loggedIn, error: ST.error, master: ST.master, universe: ST.uni.length, barsLoaded: Object.keys(ST.bars).length, rateLimitRetries: ST.rateHits || 0, chains: Object.keys(ST.chains).length, missing: ST.missing, quotesAt: ST.qt, marketOpen: anyOpen(), serverTime: istNow(), errors: ST.errors.slice(0, 10) });
+      case '/api/status': return send(req, res, 200, { ok: true, loggedIn: ST.loggedIn, error: ST.error, master: ST.master, universe: ST.uni.length, barsLoaded: Object.keys(ST.bars).length, rateLimitRetries: ST.rateHits || 0, ai: !!E.ANTHROPIC_API_KEY, chains: Object.keys(ST.chains).length, missing: ST.missing, quotesAt: ST.qt, marketOpen: anyOpen(), serverTime: istNow(), errors: ST.errors.slice(0, 10) });
       case '/api/universe': return send(req, res, 200, { items: ST.uni.map(x => ({ s: x.s, seg: x.seg, ex: x.ex, lot: x.opt ? x.opt.lot : null, step: x.opt ? x.opt.step : null, exp: x.opt ? x.opt.exp : null, hasOptions: !!x.opt, optName: x.opt ? x.opt.name : null, px: ST.quotes[x.s] ? ST.quotes[x.s].ltp : null })) });
       case '/api/quotes': return send(req, res, 200, { t: ST.qt, q: ST.quotes });
       case '/api/bars': { const since = +p.get('since') || 0, out = {}; for (const s in ST.bars) { const b = ST.bars[s], m1 = since ? b.m1.filter(r => r[0] >= since) : b.m1; if (since && !m1.length) continue; out[s] = since ? { m1 } : { m1, d1: b.d1 }; } return send(req, res, 200, { t: istNow(), bars: out, loaded: Object.keys(ST.bars).length, total: ST.uni.length }); }
       case '/api/chain': { const s = p.get('sym'); ST.hot[s] = Date.now(); return send(req, res, 200, chainOut(ST.chains[s], 0) || {}); }
       case '/api/chains': { const out = {}; for (const s in ST.chains) out[s] = chainOut(ST.chains[s], 3); return send(req, res, 200, { chains: out }); }
       case '/api/optbars': { const x = ST.bySym[p.get('sym')]; if (!x) return send(req, res, 404, { error: 'unknown symbol' }); return send(req, res, 200, await optBars(x, +p.get('K'), p.get('type'))); }
+      case '/api/news': {
+        const q = (p.get('q') || 'Nifty Sensex stock market').slice(0, 120), c = ST.news[q];
+        if (c && Date.now() - c.at < 5 * 6e4) return send(req, res, 200, c.data);
+        const r = await fetch('https://news.google.com/rss/search?q=' + encodeURIComponent(q + ' when:2d') + '&hl=en-IN&gl=IN&ceid=IN:en', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const x = await r.text();
+        const dec = v => v.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+        const items = [...x.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 12).map(m => { const g = t => { const mm = new RegExp('<' + t + '[^>]*>([\\s\\S]*?)</' + t + '>').exec(m[1]); return mm ? dec(mm[1]) : ''; }; return { title: g('title'), link: g('link'), pub: Date.parse(g('pubDate')) || 0, source: g('source') }; });
+        const data = { q, items, t: Date.now() }; ST.news[q] = { at: Date.now(), data }; return send(req, res, 200, data);
+      }
+      case '/api/ai': {
+        if (!E.ANTHROPIC_API_KEY) return send(req, res, 400, { error: 'ANTHROPIC_API_KEY is not set on the backend (Render → Environment).' });
+        if (req.method !== 'POST') return send(req, res, 405, { error: 'POST only' });
+        if (Date.now() - (ST.aiAt || 0) < 3000) return send(req, res, 429, { error: 'Too fast — wait a few seconds.' });
+        ST.aiAt = Date.now();
+        const body = await new Promise((ok, no) => { let b = ''; req.on('data', d => { b += d; if (b.length > 2e5) { no(new Error('too large')); req.destroy(); } }); req.on('end', () => ok(b)); req.on('error', no); });
+        const prompt = (JSON.parse(body || '{}').prompt || '').slice(0, 60000); if (!prompt) return send(req, res, 400, { error: 'empty prompt' });
+        const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': E.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model: E.AI_MODEL || 'claude-sonnet-5-5', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) return send(req, res, 502, { error: (j.error && j.error.message) || ('Anthropic HTTP ' + r.status) });
+        return send(req, res, 200, { text: (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n') });
+      }
       default: return send(req, res, 404, { error: 'not found' });
     }
   } catch (e) { err('http: ' + e.message); send(req, res, 500, { error: e.message }); }
