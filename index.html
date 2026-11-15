@@ -52,9 +52,9 @@ nav button.on{color:var(--ac);background:none;font-weight:600}
 .sig.SIGNAL{background:#0e3a25;color:#5df0a8}.sig.SETUP{background:#2e2a10;color:#ffd761}.sig.REJECTED{background:#3a1018;color:#ff8a9a}.sig.BLOCKED{background:#2a2f3a;color:#aab}
 .chhead{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .chhead .big{font-size:22px;font-weight:700;font-family:var(--mono)}
-.cvwrap{position:relative;height:340px;background:#080b11;border:1px solid var(--ln);border-radius:12px;overflow:hidden;touch-action:pan-y}
+.cvwrap{position:relative;height:max(420px,64vh);background:#080b11;border:1px solid var(--ln);border-radius:12px;overflow:hidden;touch-action:pan-y}
 #cv{width:100%;height:100%;display:block}
-.legend{position:absolute;left:8px;top:6px;font-family:var(--mono);font-size:10.5px;color:var(--mu);pointer-events:none;line-height:1.5}
+.legend{position:absolute;left:6px;top:6px;background:#080b11d9;padding:3px 7px;border-radius:6px;max-width:calc(100% - 80px);font-family:var(--mono);font-size:10.5px;color:var(--mu);pointer-events:none;line-height:1.5}
 .zoom{position:absolute;right:62px;bottom:22%;display:flex;gap:4px}
 .zoom button{padding:1px 8px;font-size:13px;background:#0f1520cc}
 table{width:100%;border-collapse:collapse;font-size:12px}
@@ -84,7 +84,7 @@ summary::-webkit-details-marker{display:none}
 .note{font-size:11.5px;color:var(--mu);margin-top:6px}
 .warn{font-size:12px;background:#2b1f05;border:1px solid #5c430a;color:#ffd77a;border-radius:8px;padding:8px;margin-bottom:10px}
 .grid2{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:820px){.grid2{grid-template-columns:1fr 1fr}.cvwrap{height:440px}}
+@media(min-width:820px){.grid2{grid-template-columns:1fr 1fr}.cvwrap{height:min(640px,70vh)}}
 .callcard{border-left:3px solid var(--up)}
 .callcard.pe{border-left-color:var(--dn)}
 .ai{font-size:13px;line-height:1.55;white-space:normal}
@@ -106,6 +106,14 @@ summary::-webkit-details-marker{display:none}
 .chain tr.taker td.k{outline:2px solid #ff8c00;outline-offset:-2px}
 #bell{position:relative;padding:2px 8px;font-size:14px}#bellN{position:absolute;top:-6px;right:-6px;background:var(--dn);color:#fff;border-radius:9px;font-size:10px;padding:0 5px;font-family:var(--mono)}#bellN:empty{display:none}
 .modal .box{max-height:88vh;overflow:auto;max-width:560px}
+.cvwrap.fs{position:fixed;inset:0;height:100vh!important;height:100dvh!important;z-index:90;border-radius:0;border:0}
+body.noscroll{overflow:hidden}
+.fstf{display:none;position:absolute;left:6px;bottom:6px;gap:4px;z-index:2}.cvwrap.fs .fstf{display:flex}.fstf button{padding:3px 9px;font-size:12px;background:#0f1520dd}.fstf button.on{background:var(--ac);color:#111}
+.mood{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--ln);font-size:12px;font-family:var(--mono);overflow-x:auto;white-space:nowrap;cursor:pointer;scrollbar-width:none}.mood::-webkit-scrollbar{display:none}
+.mood .sep{color:#33405a}.light{width:12px;height:12px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 10px currentColor}.light.green{background:#1fc77a;color:#1fc77a}.light.red{background:#f0475a;color:#f0475a}.light.yellow{background:#f5b301;color:#f5b301}
+.bigarrow{font-size:54px;line-height:1;width:74px;height:74px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:2px dashed #33405a;flex:0 0 auto}.bigarrow.up{color:#1fc77a}.bigarrow.dn{color:#f0475a}.bigarrow.ac{color:#f5b301;font-size:40px}
+.decision{font-size:22px;font-weight:700;font-family:var(--mono)}
+.probbar{display:flex;height:24px;border-radius:7px;overflow:hidden;margin:10px 0 4px;font-family:var(--mono);font-size:12px;font-weight:700}.probbar .pu{background:#0f5132;color:#7ff5b8;display:flex;align-items:center;padding-left:8px;min-width:46px}.probbar .pd{background:#5c1520;color:#ffb3bd;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;min-width:46px}
 </style>
 </head>
 <body>
@@ -116,6 +124,7 @@ summary::-webkit-details-marker{display:none}
     <div class="clock"><button id="bell" data-act="jarvis" title="Jarvis alerts">🔔<span id="bellN"></span></button><span id="clk">--:--</span><button id="pp" data-act="pause">❚❚</button><button id="spd" data-act="speed">1×</button></div>
   </div>
   <div class="ticker" id="ticker"></div>
+  <div class="mood" id="moodbar" data-act="mood"></div>
 </header>
 <main id="main"></main>
 <nav id="nav">
@@ -161,7 +170,7 @@ function ncdf(x){const t=1/(1+.2316419*Math.abs(x)),d=.3989423*Math.exp(-x*x/2);
 function bs(S,K,T,iv,type,r=.065){if(T<=0||S<=0)return{p:Math.max(0,type==='CE'?S-K:K-S),d:type==='CE'?(S>K?1:0):(S<K?-1:0)};const sq=iv*Math.sqrt(T),d1=(Math.log(S/K)+(r+iv*iv/2)*T)/sq,d2=d1-sq;if(type==='CE')return{p:S*ncdf(d1)-K*Math.exp(-r*T)*ncdf(d2),d:ncdf(d1)};return{p:K*Math.exp(-r*T)*ncdf(-d2)-S*ncdf(-d1),d:ncdf(d1)-1}}
 
 /* ---------------- CONFIG ---------------- */
-const CFG_DEF={riskCap:2500,capital:300000,capPct:1,dailyLoss:6000,slipPct:.5,brokerage:20,maxCorr:2,autoPaper:true,staleSec:120,emergPct:.5,minRR:2,minOI:500,maxSpr:3,minOptVol:200};
+const CFG_DEF={riskCap:2500,capital:300000,capPct:1,dailyLoss:6000,slipPct:.5,brokerage:20,maxCorr:2,autoPaper:true,autoAdd:true,staleSec:120,emergPct:.5,minRR:2,minOI:500,maxSpr:3,minOptVol:200};
 let CFG=ld('krt_cfg',CFG_DEF);
 const budget=()=>Math.min(CFG.riskCap,CFG.capital*CFG.capPct/100);
 
@@ -497,7 +506,7 @@ function scanSym(sym){const A=mtf(sym),st={};for(const k in SFN){if(!STRAT[k].se
   const bu=(sym.seg!=='STK'||isLive(sym))?'':ch>=0?(foi>=0?'Long buildup':'Short covering'):(foi>=0?'Short buildup':'Long unwinding');
   let jk=null;try{jk=jackScan(sym,A)}catch(e){}
   return{A,st,score:sc,bu,dc:dataCheck(sym,false),jk}}
-function scanAll(){for(const s of tradables())SCAN[s.s]=scanSym(s);computeTop();try{computeJackpot()}catch(e){console.error(e)}logSignals();try{evalTracks();aiTrackScan()}catch(e){console.error(e)}if(CFG.autoPaper)autoPaper();saveJ();saveX();WARM=true}
+function scanAll(){for(const s of tradables())SCAN[s.s]=scanSym(s);computeTop();try{computeJackpot()}catch(e){console.error(e)}try{computeMood()}catch(e){console.error(e)}logSignals();try{evalTracks();aiTrackScan()}catch(e){console.error(e)}if(CFG.autoPaper)autoPaper();saveJ();saveX();WARM=true}
 function computeTop(){const arr=SYMS.filter(s=>SCAN[s.s]&&SCAN[s.s].dc.ok).map(s=>{const r=SCAN[s.s],A=r.A,dir=r.score>0?'CE':'PE',sg=dir==='CE'?1:-1,a15=A['15m'];if(!a15.ok)return null;
     const en=ltp(s);let inv=sg>0?(a15.sup[0]??en-1.5*a15.atr):(a15.res[0]??en+1.5*a15.atr);let tg=sg>0?(A['1h'].res[0]??a15.res[0]??en+3*a15.atr):(A['1h'].sup[0]??a15.sup[0]??en-3*a15.atr);if(sg*(en-inv)<=0)inv=en-sg*1.5*a15.atr;if(sg*(tg-en)<=0)tg=en+sg*3*a15.atr;
     const pl=planOption(s,dir,en,inv,tg),agree=Object.entries(r.st).filter(([k,v])=>v.dir===dir&&(v.status==='SIGNAL'||v.status==='SETUP')).map(([k,v])=>k+(v.status==='SIGNAL'?'✓':'~'));
@@ -625,12 +634,13 @@ async function pollQuotes(){const r=await lget('/api/quotes');for(const k in r.q
 function renderLiveState(){const e=$('#lvState');if(!e)return;const st=LIVE.status;
   e.innerHTML=LIVE.st==='live'?`<span class="up">● Connected.</span> ${LIVE.loaded??'?'}/${LIVE.total??'?'} symbols with candles${st&&st.missing&&st.missing.length?' · not found on Angel: '+esc(st.missing.join(', ')):''}${LIVE.err?'<br><span class="dn">'+esc(LIVE.err)+'</span>':''}`
    :LIVE.st==='connecting'?'<span class="ac">Connecting… (a sleeping Render server can take ~1 minute to wake)</span>':LIVE.st==='error'?'<span class="dn">'+esc(LIVE.err)+'</span>':'<span class="mu">Not connected — demo feed active.</span>'}
+function ensureSym(u){let s=SYM[u.s];
+  if(!s){s=addSym({s:u.s,n:u.s,seg:u.seg,ex:u.ex==='BSE'?'BSE':u.seg==='MCX'?'MCX':'NSE',px:u.px||100,chg:0,sector:'Other',lot:u.lot||1,step:u.step||1,iv:.3,exp:u.exp||EXP.mon,sess:u.seg==='MCX'?MCXS:NSE,vb:1e4,oiB:1e5,ovb:1e5,liq:.5,spr:.015,dyn:true});build(s);SYM[s.s]=s}
+  if(!s.live)s.live={m1:[],d1:[],q:null,ready:false};if(u.lot)s.lot=u.lot;if(u.step)s.step=u.step;if(u.exp)s.exp=u.exp;s.optName=u.optName;s.hasOpt=u.hasOptions;return s}
 async function connectLive(){LIVE.st='connecting';LIVE.err='';renderLiveState();
   try{const st=await lget('/api/status');LIVE.status=st;if(!st.loggedIn)throw new Error('Backend reached, but Angel login failed: '+(st.error||'check the env vars'));if(!st.master)throw new Error('Backend is still loading the Angel scrip master — try again in a minute.');
     const uni=await lget('/api/universe');
-    for(const u of uni.items){let s=SYM[u.s];
-      if(!s){s=addSym({s:u.s,n:u.s,seg:u.seg,ex:u.ex==='BSE'?'BSE':u.seg==='MCX'?'MCX':'NSE',px:u.px||100,chg:0,sector:'Other',lot:u.lot||1,step:u.step||1,iv:.3,exp:u.exp||EXP.mon,sess:u.seg==='MCX'?MCXS:NSE,vb:1e4,oiB:1e5,ovb:1e5,liq:.5,spr:.015,dyn:true});build(s);SYM[s.s]=s}
-      s.live={m1:[],d1:[],q:null,ready:false};if(u.lot)s.lot=u.lot;if(u.step)s.step=u.step;if(u.exp)s.exp=u.exp;s.optName=u.optName;s.hasOpt=u.hasOptions}
+    for(const u of uni.items)ensureSym(u);
     LIVE.on=true;applyBars(await lget('/api/bars?since=0'),true);await pollQuotes();
     try{const r=await lget('/api/chains');for(const k in r.chains)LIVE.chains[k]=r.chains[k]}catch(e){}
     LIVE.st='live';CACHE.clear();SCAN={};WARM=false;scanAll();render()}
@@ -641,8 +651,11 @@ const LBUSY={};
 async function lrun(k,ms,fn){if(LBUSY[k]||Date.now()-(LIVE['t_'+k]||0)<ms)return;LBUSY[k]=true;try{await fn();LIVE.err=''}catch(e){LIVE.err=k+': '+e.message}LIVE['t_'+k]=Date.now();LBUSY[k]=false}
 function liveLoop(){if(!LIVE.on)return;const open=anyMktOpen();
   lrun('q',open?2000:30000,pollQuotes);
-  lrun('b',open?20000:180000,async()=>applyBars(await lget('/api/bars?since='+LIVE.since),false));
+  const missing=SYMS.some(s=>s.live&&!s.live.ready);
+  if(missing||(LIVE.loaded!=null&&LIVE.total!=null&&LIVE.loaded<LIVE.total))lrun('bf',15000,async()=>{applyBars(await lget('/api/bars?since=0'),true);CACHE.clear();scanAll();if(view.tab==='chart')renderChartPanels();else if(view.tab==='mkt')renderMkList();renderLiveState()});
+  else lrun('b',open?20000:180000,async()=>applyBars(await lget('/api/bars?since='+LIVE.since),false));
   lrun('ca',open?60000:300000,async()=>{const r=await lget('/api/chains');for(const k in r.chains)if(k!==view.sym||!LIVE.chains[k])LIVE.chains[k]=r.chains[k]});
+  lrun('mv',(view.tab==='mkt'&&view.seg==='MOV')?60000:180000,()=>loadMovers(true));
   const vs=SYM[view.sym];if(view.tab==='chart'&&vs&&vs.live&&vs.hasOpt)lrun('c1',open?5000:60000,async()=>{const r=await lget('/api/chain?sym='+encodeURIComponent(view.sym));if(r&&r.rows){LIVE.chains[view.sym]=r;if(view.tab==='chart')renderChartPanels()}})}
 
 /* ---------------- JACKPOT · JARVIS · AI ARROW · SCORECARD ---------------- */
@@ -763,7 +776,7 @@ function openJarvis(){UNREAD=0;renderBell();
   loadNews('Nifty Sensex stock market India',$('#jvNews'))}
 async function jarvisAsk(){const out=$('#jvOut');if(!aiReady()){out.innerHTML='<span class="mu">AI is not set up. Add ANTHROPIC_API_KEY to the backend in Render → Environment, then reconnect.</span>';return}
   const top=(a)=>a.slice(0,4).map(x=>({sym:x.s.s,dir:x.dir,status:x.status,levels:x.broken.map(b=>b.nm+' '+fp(b.lvl)+(b.vr?' vol '+b.vr.toFixed(1)+'x':'')),strike:x.plan&&(x.plan.best||x.plan.top)?(x.plan.best||x.plan.top).K:null,passesRisk:!!(x.plan&&x.plan.best)}));
-  const ctx={time:tHM(clockMs())+' IST',feed:LIVE.on?'live Angel One':'demo',marketOpen:LIVE.on?anyMktOpen():null,jackpotCE:top(JACK.ce),jackpotPE:top(JACK.pe),confluenceCE:TOP.ce.map(x=>x.s.s),confluencePE:TOP.pe.map(x=>x.s.s),
+  const ctx={mood:MOOD?{score:MOOD.score,light:MOOD.light,next30minUpProb:+MOOD.p.toFixed(2),breadthUpPct:Math.round(MOOD.br),pcr:MOOD.pcr}:null,time:tHM(clockMs())+' IST',feed:LIVE.on?'live Angel One':'demo',marketOpen:LIVE.on?anyMktOpen():null,jackpotCE:top(JACK.ce),jackpotPE:top(JACK.pe),confluenceCE:TOP.ce.map(x=>x.s.s),confluencePE:TOP.pe.map(x=>x.s.s),
     indices:['NIFTY','BANKNIFTY','SENSEX'].map(k=>({k,ltp:+ltp(SYM[k]).toFixed(1),chg:+chgPct(SYM[k]).toFixed(2)})),headlines:((NEWS['Nifty Sensex stock market India']||{}).items||[]).slice(0,8).map(n=>n.title),
     scorecard:Object.values(TRACK.reduce((g,t)=>{const k=t.src;g[k]=g[k]||{src:k,success:0,failed:0};if(t.st==='SUCCESS')g[k].success++;if(t.st==='FAILED')g[k].failed++;return g},{}))};
   const lang=view.aiLang==='ta'?'Reply in Tanglish (Tamil in Latin script, numbers/terms in English).':'Reply in simple English.';
@@ -778,8 +791,103 @@ function jackHTML(){return`<div class="warn">💰 <b>Jackpot</b> = price breakin
   <div class="grid2"><div><h3 class="up" style="margin:4px 0 8px">💰 JACKPOT CE</h3>${JACK.ce.map(jackCard).join('')||'<div class="card mu">No CE breakouts or near-levels right now.</div>'}</div>
   <div><h3 class="dn" style="margin:4px 0 8px">💰 JACKPOT PE</h3>${JACK.pe.map(jackCard).join('')||'<div class="card mu">No PE breakdowns or near-levels right now.</div>'}</div></div>`}
 
+/* ---------------- V3: DECISION ENGINE · MARKET MOOD · MOVERS · FULLSCREEN ---------------- */
+let DEC={},MOOD=null,MOVERS=null,MOVT=0,MOODPREV=ld('krt_mood','');
+function adxArr(b,n=14){let tr=0,pd=0,md=0,adx=0;const o=[{adx:0,pdi:0,mdi:0}];for(let i=1;i<b.length;i++){const up=b[i].h-b[i-1].h,dn=b[i-1].l-b[i].l,p=up>dn&&up>0?up:0,m=dn>up&&dn>0?dn:0,t=Math.max(b[i].h-b[i].l,Math.abs(b[i].h-b[i-1].c),Math.abs(b[i].l-b[i-1].c));
+  if(i<=n){tr+=t;pd+=p;md+=m}else{tr=tr-tr/n+t;pd=pd-pd/n+p;md=md-md/n+m}const pdi=tr?100*pd/tr:0,mdi=tr?100*md/tr:0,dx=pdi+mdi?100*Math.abs(pdi-mdi)/(pdi+mdi):0;adx=i<=n?dx:(adx*(n-1)+dx)/n;o.push({adx,pdi,mdi})}return o}
+function wilson(p,n,z=1.645){if(!n)return[0,1];const d=1+z*z/n,c=p+z*z/(2*n),r=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return[Math.max(0,(c-r)/d),Math.min(1,(c+r)/d)]}
+const calib=pj=>pj?(pj.up*pj.K+5)/(pj.K+10):.5; // shrink the raw neighbour share toward 50% (10 pseudo-samples)
+const tfMin={'3m':3,'5m':5,'15m':15,'1h':60,'1D':375,'1M':7875};
+function horizonTxt(tf,H){const m=(tfMin[tf]||15)*H;return tf==='1D'?H+' days':tf==='1M'?H+' months':m>=60?(m/60).toFixed(m%60?1:0)+' h':m+' min'}
+// neighbour excursion stats (computed for the current bar only)
+function analogStats(bars,H,K){const n=bars.length;if(n<H+K*2+40)return null;const c=bars.map(b=>b.c),R=rsiArr(c),A=atrArr(bars),E=ema(c,20),hasV=bars.some(b=>b.v>0),F=new Array(n);
+  for(let i=25;i<n;i++){const a=(A[i]/c[i])||1e-9,va=hasV?avg(bars.slice(i-20,i).map(x=>x.v)):0;F[i]=[(c[i]/c[i-1]-1)/a,(c[i]/c[i-5]-1)/a/2.2,(c[i]/c[i-20]-1)/a/4.5,(R[i]-50)/15,(c[i]-E[i])/(A[i]||1e-9)/2,hasV&&va?clamp(Math.log((bars[i].v||1)/va),-2,2):0]}
+  const q=F[n-1],d=[];for(let j=25;j+H<=n-1;j++){const f=F[j];let s=0;for(let k=0;k<6;k++){const z=q[k]-f[k];s+=z*z}d.push([s,j])}if(d.length<K*2)return null;d.sort((a,b)=>a[0]-b[0]);
+  let upFirst=0,dnFirst=0,mfe=[],mae=[];for(const[,j]of d.slice(0,K)){let hiM=-1e9,loM=1e9,res=0;for(let k=1;k<=H;k++){const b=bars[j+k];hiM=Math.max(hiM,b.h);loM=Math.min(loM,b.l);if(!res){const dn=b.l<=c[j]-A[j],up=b.h>=c[j]+A[j];if(dn)res=-1;else if(up)res=1}}if(res>0)upFirst++;else if(res<0)dnFirst++;mfe.push(hiM/c[j]-1);mae.push(loM/c[j]-1)}
+  return{upFirst:upFirst/K,dnFirst:dnFirst/K,avgUpEx:avg(mfe)*100,avgDnEx:avg(mae)*100,K}}
+function structureState(b,a){const sw=swings(b,2),H=sw.filter(x=>x.type==='H'),L=sw.filter(x=>x.type==='L'),lc=last(b).c;if(!H.length||!L.length)return{t:'—',d:0};const lh=last(H).p,ll=last(L).p;
+  if(lc>lh)return{t:a.structure==='Bearish'?'CHOCH ▲ (bearish → bullish)':'BOS ▲ above '+fp(lh),d:1};if(lc<ll)return{t:a.structure==='Bullish'?'CHOCH ▼ (bullish → bearish)':'BOS ▼ below '+fp(ll),d:-1};return{t:'Inside range '+fp(ll)+'–'+fp(lh),d:0}}
+function decide(sym,tf){const r=SCAN[sym.s];if(!r)return null;const b=complete(getTF(sym,tf)).slice(-400);if(b.length<60)return null;const a=analyze(b.slice(-300));if(!a.ok)return null;
+  const pj=analogFor(sym.s,b,tf),H=tfH[tf]||6,st=analogStats(b,H,30),pUp=calib(pj),ci=pj?wilson(pj.up,pj.K):[0,1],c=b.map(x=>x.c),m12=ema(c,12),m26=ema(c,26),mac=c.map((_,i)=>m12[i]-m26[i]),sg9=ema(mac,9),hist=last(mac)-last(sg9),ad=last(adxArr(b.slice(-300)));
+  const mom=clamp(Math.round(50+(a.rsi-50)*1.2+clamp(hist/(a.atr||1),-1,1)*20),0,100),volOK=a.rv!=null&&a.rv>=1.3,hasVol=b.some(x=>x.v>0),ch=sym.hasOpt===false?null:chainNow(sym);
+  let oi=null;if(ch&&!ch.model){oi=(ch.peChg>ch.ceChg&&ch.pcr>=1)?1:(ch.ceChg>ch.peChg&&ch.pcr<1)?-1:0}
+  const sts=structureState(b.slice(-300),a),dir=pUp>=.58?1:pUp<=.42?-1:0,lc=last(b).c;
+  const atrs=atrArr(b).map((x,i)=>x/c[i]*100).slice(-200).sort((x,y)=>x-y),med=atrs[Math.floor(atrs.length/2)]||1,atrPct=a.atr/lc*100,risk=atrPct>1.5*med?'High':atrPct<.7*med?'Low':'Normal';
+  const regime=(ad.adx>=25?'Trending '+(ad.pdi>ad.mdi?'up':'down'):ad.adx<18?'Ranging':'Transition')+(risk==='High'?' · high volatility':'');
+  const pts=[];if(dir){pts.push(['Multi-TF bias agrees',Math.sign(a.bias)===dir]);pts.push(['Trend strength ADX≥20 in direction',ad.adx>=20&&(ad.pdi>ad.mdi?1:-1)===dir]);pts.push(['Momentum (RSI+MACD) agrees',(mom-50)*dir>5]);pts.push(['Volume ≥1.3× average',hasVol?volOK:null]);pts.push(['OI flow agrees',oi==null?null:oi===dir]);pts.push(['Structure BOS/CHOCH agrees',sts.d===dir]);pts.push(['Model walk-forward hit ≥55% (≥15 cases)',!!(pj&&pj.bt.tot>=15&&pj.bt.hits/pj.bt.tot>=.55)])}
+  const q=pts.filter(x=>x[1]===true).length,grade=!dir?'—':q>=6?'A':q>=4?'B':q>=2?'C':'D',dc=dataCheck(sym,false);
+  let plan=null,inv=null,tgts=[];const en=ltp(sym);if(dir){inv=dir>0?(a.sup[0]??en-1.5*a.atr):(a.res[0]??en+1.5*a.atr);if(dir*(en-inv)<=0||Math.abs(en-inv)>3*a.atr)inv=en-dir*1.5*a.atr;const R1=Math.abs(en-inv);tgts=[1,1.5,2,3,4].map(m=>en+dir*m*R1);plan=sym.hasOpt===false?null:planOption(sym,dir>0?'CE':'PE',en,inv,tgts[2])}
+  const best=plan&&(plan.best||plan.top),open=!isLive(sym)||marketOpen(sym);
+  let decision='WAIT';if(!dc.ok||(risk==='High'&&grade!=='A'))decision='AVOID';else if(dir&&(grade==='A'||grade==='B')&&plan&&plan.best)decision=dir>0?'BUY CE':'BUY PE';
+  const why=[];if(pj)why.push(`${Math.round(pj.up*100)}% of ${pj.K} similar past ${tf} setups rose over ${horizonTxt(tf,H)}`);pts.forEach(([n,v])=>{if(v===true)why.push('✓ '+n);else if(v===false)why.push('✗ '+n)});
+  if(decision==='WAIT'&&dir&&!(plan&&plan.best))why.push('No strike passes the risk / liquidity / 2R checks');if(!dir)why.push('No reliable edge: calibrated probability is between 42% and 58%');if(!dc.ok)why.push('Data issue: '+dc.iss.join(', '));
+  const D={sym:sym.s,tf,t:last(b).t,H,horizon:horizonTxt(tf,H),pUp,pDn:1-pUp,raw:pj?pj.up:null,ci,K:pj?pj.K:0,bt:pj?pj.bt:null,st,dir,adx:Math.round(ad.adx),mom,volOK:hasVol?volOK:null,rv:a.rv,oi,sts,grade,q,qn:pts.filter(x=>x[1]!=null).length,risk,regime,decision,plan,best,inv,tgts,en,why,open};
+  DEC[sym.s+'|'+tf]=D;return D}
+function decisionHTML(D,sym){if(!D)return'<h3>🧭 AI decision</h3><div class="mu small">Not enough completed candles on this timeframe yet.</div>';
+  const col=D.decision.startsWith('BUY CE')?'up':D.decision.startsWith('BUY PE')?'dn':D.decision==='AVOID'?'dn':'ac',bu=Math.round(D.pUp*100),be=100-bu,b=D.best,sgn=D.dir;
+  const arrow=D.dir>0?'<div class="bigarrow up">▲</div>':D.dir<0?'<div class="bigarrow dn">▼</div>':'<div class="bigarrow ac">◆</div>';
+  const kv=(l,v,c='')=>`<div><div class="l">${l}</div><div class="v ${c}">${v}</div></div>`;
+  const prem=b?D.tgts.map((u,i)=>{const p=Math.max(.05,priceAt(sym,b.K,b.type,u,b.q.iv)-(b.q.ask-b.q.bid)/2);return`<tr><td>T${i+1}</td><td>${fp(u)}</td><td class="up">${fp(p)}</td><td>${([1,1.5,2,3,4][i])}R</td></tr>`}).join(''):'';
+  return`<h3>🧭 AI decision · ${D.tf} <span class="mono small mu" style="margin-left:auto;text-transform:none">signal ${tDate(D.t)} ${tHM(D.t)} · horizon ${D.horizon}</span></h3>
+  <div class="flex" style="align-items:center;gap:14px">${arrow}<div><div class="decision ${col}">${D.decision}</div><div class="small mu">${D.open?'':'Market closed — plan for next session. '}Quality <b>${D.grade}</b> (${D.q}/${D.qn} checks) · Risk <b>${D.risk}</b> · ${esc(D.regime)}</div></div></div>
+  <div class="probbar"><div class="pu" style="width:${bu}%">▲ ${bu}%</div><div class="pd" style="width:${be}%">${be}% ▼</div></div>
+  <div class="small mu">Calibrated from ${D.K} similar past setups (raw ${D.raw!=null?Math.round(D.raw*100)+'%':'—'} up · 90% range ${Math.round(D.ci[0]*100)}–${Math.round(D.ci[1]*100)}%). Walk-forward hit ${D.bt&&D.bt.tot?Math.round(D.bt.hits/D.bt.tot*100)+'% of '+D.bt.tot+' recent calls':'n/a'}. Yellow ◆ = no reliable edge.</div>
+  <div class="kv" style="grid-template-columns:repeat(3,1fr)">${kv('Trend strength (ADX)',D.adx+(D.adx>=25?' strong':D.adx<18?' weak':''))}${kv('Momentum score',D.mom+'/100',D.mom>55?'up':D.mom<45?'dn':'')}${kv('Volume confirm',D.volOK==null?'n/a':D.volOK?'Yes '+D.rv.toFixed(1)+'×':'No'+(D.rv?' '+D.rv.toFixed(1)+'×':''),D.volOK?'up':'')}
+  ${kv('OI confirm',D.oi==null?'n/a':D.oi>0?'Bullish flow':D.oi<0?'Bearish flow':'Mixed',D.oi>0?'up':D.oi<0?'dn':'')}${kv('Structure',esc(D.sts.t),D.sts.d>0?'up':D.sts.d<0?'dn':'')}${kv('Pattern matches',D.K+' cases')}
+  ${kv('Hit +1 ATR first',D.st?Math.round(D.st.upFirst*100)+'%':'—','up')}${kv('Hit −1 ATR first',D.st?Math.round(D.st.dnFirst*100)+'%':'—','dn')}${kv('Avg excursion',D.st?'+'+fmt(D.st.avgUpEx,2)+'% / '+fmt(D.st.avgDnEx,2)+'%':'—')}</div>
+  ${b?`<div class="plan"><div class="flex"><span class="hd ${sgn>0?'up':'dn'}">${sym.s} ${b.K} ${b.type}</span><span class="mu small">exp ${tDate(sym.exp)} · quote ${tHM(b.q.t||nowMs(sym))}</span>${D.plan.best?'':'<span class="sig REJECTED">FAILS RISK CHECKS</span>'}</div>
+    <div class="kv">${kv('Premium (ask)',fp(b.entry))}${kv('Entry zone',fp(b.q.bid)+' – '+fp(b.entry))}${kv('Premium SL (est.)',fp(b.slP),'dn')}${kv('Underlying SL',fp(D.inv),'dn')}${kv('Lots / risk','×'+b.lots+' · ₹'+fmt(b.totRisk||b.riskLot,0))}${kv('Net R:R (to T3)',b.rr.toFixed(2))}</div>
+    <table style="margin-top:6px"><tr><th>Target</th><th>Underlying</th><th>Premium (est.)</th><th>R</th></tr>${prem}</table>
+    ${D.plan.best?'':`<div class="note dn">${esc(b.why.join(' · '))}</div>`}<div class="flex" style="margin-top:6px"><button data-chainopt="${b.K}|${b.type}">📝 Paper trade</button><button data-openopt="${sym.s}|${b.K}|${b.type}">Option chart</button></div></div>`:''}
+  <details><summary>Reasons &amp; invalidation</summary><ul class="small">${D.why.map(w=>`<li>${esc(w)}</li>`).join('')}${D.inv!=null?`<li><b>Invalidation:</b> a completed candle ${D.dir>0?'below':'above'} ${fp(D.inv)}, or the next ${D.tf} close turning the arrow ${D.dir>0?'red':'green'}.</li>`:''}</ul></details>
+  <details><summary>How these numbers are calculated</summary><div class="small mu">
+  <b>Probability:</b> the model looks for the 30 past ${D.tf} candles on this chart whose momentum (1, 5 and 20-bar returns in ATR units), RSI, distance from EMA20 and relative volume are closest to the last closed candle. It counts how many rose over the next ${D.H} candles, then shrinks that share toward 50% with 10 pseudo-samples, so small samples can't show extreme numbers. Only past data is used.<br>
+  <b>90% range:</b> Wilson interval on that share. <b>Walk-forward hit:</b> the same model run at each of the last ~80 candles using only data available then, counting calls ≥60% / ≤40%.<br>
+  <b>Trend strength:</b> ADX(14). <b>Momentum:</b> 50 + 1.2×(RSI−50) + 20×clamp(MACD histogram ÷ ATR, ±1). <b>Volume:</b> last candle ÷ 20-candle average. <b>OI:</b> PE OI added faster than CE with PCR ≥ 1 = bullish, the reverse = bearish.<br>
+  <b>Structure:</b> close beyond the last confirmed swing; BOS continues the trend, CHOCH flips it. <b>Quality:</b> how many of the 7 checks agree (A ≥ 6, B ≥ 4, C ≥ 2). <b>Risk:</b> ATR% vs its 200-candle median (High > 1.5×, Low < 0.7×).<br>
+  <b>Decision:</b> BUY CE/PE only if probability ≥ 58% / ≤ 42%, quality A or B, and a strike passes the ₹ risk, liquidity and 2R checks. AVOID if data is stale, or volatility is high without quality A. Otherwise WAIT.</div></details>`}
+
+/* market mood (top bar) */
+function computeMood(){const N=SYM.NIFTY;if(!N||(LIVE.on&&!(N.live&&N.live.ready)))return;const b3=complete(getTF(N,'3m')).slice(-400);if(b3.length<120)return;
+  const pj=analogFor('NIFTY',b3,'3m'),p=calib(pj),A=SCAN.NIFTY?SCAN.NIFTY.A:mtf(N),b5=complete(getTF(N,'5m')),e5=ema(b5.map(x=>x.c),20),abv=ltp(N)>last(e5)?1:-1;
+  const st=SYMS.filter(s=>s.seg==='STK'&&(!LIVE.on||s.live)),br=st.length?st.filter(s=>chgPct(s)>0).length/st.length*100:50,ch=chainNow(N),pcr=ch&&!ch.model?ch.pcr:null;
+  const mtfB=((A['5m'].ok?A['5m'].bias:0)+(A['15m'].ok?A['15m'].bias:0))/2;
+  const comp=[['AI next 30 min',(p-.5)*200,.35],['5m/15m trend bias',mtfB/3*100,.25],['NIFTY vs 5m EMA20',abv*100,.15],['Breadth (stocks up %)',(br-50)*2,.15],['NIFTY PCR',pcr==null?0:pcr>=1.1?100:pcr<=.9?-100:0,.10]];
+  const score=Math.round(comp.reduce((s,c)=>s+clamp(c[1],-100,100)*c[2],0)),light=score>=25&&p>=.55?'green':score<=-25&&p<=.45?'red':'yellow';
+  const bestCE=(JACK.ce.find(x=>x.plan&&x.plan.best)||TOP.ce.find(x=>x.pl&&x.pl.best)),bestPE=(JACK.pe.find(x=>x.plan&&x.plan.best)||TOP.pe.find(x=>x.pl&&x.pl.best));
+  MOOD={score,light,p,pj,br,pcr,comp,t:last(b3).t,bestCE,bestPE};
+  if(MOODPREV&&MOODPREV!==light&&WARM){const msg=light==='green'?'🟢 Market mood turned UP — NIFTY favoured higher next 30 min ('+Math.round(p*100)+'%)':light==='red'?'🔴 Market mood turned DOWN — NIFTY favoured lower next 30 min ('+Math.round((1-p)*100)+'%)':'🟡 Market mood neutral — no clear edge, be careful with new entries';notify('mood',msg,'NIFTY',true)}
+  MOODPREV=light;sv('krt_mood',light);renderMood()}
+function pickTxt(x){if(!x)return'—';const pl=x.plan||x.pl,p=pl&&(pl.best||pl.top);return x.s.s+(p?' '+p.K+' '+x.dir:'')}
+function renderMood(){const e=$('#moodbar');if(!e)return;if(!MOOD){e.innerHTML='<span class="mu small">Market mood: waiting for enough NIFTY candles…</span>';return}const M=MOOD,lab=M.light==='green'?'BULLISH':M.light==='red'?'BEARISH':'NEUTRAL';
+  e.innerHTML=`<span class="light ${M.light}"></span><b class="${M.light==='green'?'up':M.light==='red'?'dn':'ac'}">${lab} ${M.score>0?'+':''}${M.score}</b><span class="mu">Next 30m</span><b class="${M.p>=.55?'up':M.p<=.45?'dn':'ac'}">${M.p>=.55?'▲':M.p<=.45?'▼':'◆'} ${Math.round((M.p>=.5?M.p:1-M.p)*100)}%</b><span class="sep">|</span><span class="up">CE ⭐ ${esc(pickTxt(M.bestCE))}</span><span class="sep">|</span><span class="dn">PE ⭐ ${esc(pickTxt(M.bestPE))}</span><span class="mu" style="margin-left:auto">ⓘ</span>`}
+function openMood(){if(!MOOD)return;const M=MOOD;modal(`<div class="flex"><h3 style="margin:0">Market mood · NIFTY</h3><button data-act="closem" style="margin-left:auto">✕</button></div>
+  <div class="small mu" style="margin:6px 0">Updated ${tHM(M.t)} IST (last closed 3m candle). Score −100…+100.</div>
+  <table><tr><th>Component</th><th>Value</th><th>Weight</th></tr>${M.comp.map(c=>`<tr><td class="t">${c[0]}</td><td class="${c[1]>0?'up':c[1]<0?'dn':'mu'}">${Math.round(clamp(c[1],-100,100))}</td><td>${Math.round(c[2]*100)}%</td></tr>`).join('')}<tr><td class="t"><b>Total</b></td><td><b>${M.score}</b></td><td></td></tr></table>
+  <div class="note">Green = score ≥ +25 and AI next-30-min ≥ 55%. Red = score ≤ −25 and ≤ 45%. Otherwise yellow. AI next 30 min = 3m analog model, ${M.pj?M.pj.K:0} similar setups, walk-forward hit ${M.pj&&M.pj.bt.tot?Math.round(M.pj.bt.hits/M.pj.bt.tot*100)+'% ('+M.pj.bt.tot+')':'n/a'}. Breadth ${Math.round(M.br)}% of tracked stocks up. PCR ${M.pcr!=null?M.pcr.toFixed(2):'n/a'}.</div>
+  <div class="flex" style="margin-top:8px">${M.bestCE?`<button data-open="${M.bestCE.s.s}" class="up">CE ⭐ ${esc(pickTxt(M.bestCE))}</button>`:''}${M.bestPE?`<button data-open="${M.bestPE.s.s}" class="dn">PE ⭐ ${esc(pickTxt(M.bestPE))}</button>`:''}<button data-act="jarvisguide">🤖 AI options guide</button></div><div id="jvOut" class="ai" style="margin-top:6px"></div>`)}
+
+/* movers (Angel F&O-wide) */
+async function loadMovers(force){if(!LIVE.on)return;if(!force&&MOVERS&&Date.now()-MOVT<60000)return;MOVT=Date.now();try{MOVERS=await lget('/api/movers');if(CFG.autoAdd!==false)autoAddMovers();if(view.tab==='mkt'&&view.seg==='MOV')renderMkList()}catch(e){MOVERS={lists:{},errors:[e.message]}}}
+let ADDING=false;async function autoAddMovers(){if(ADDING||!MOVERS||!MOVERS.lists)return;ADDING=true;try{const L=MOVERS.lists,want=[];for(const k of['gainers','losers','longBuildup','shortBuildup','shortCovering'])for(const x of(L[k]||[]).slice(0,3))if(x.s&&!SYM[x.s]&&!want.includes(x.s))want.push(x.s);
+  for(const s of want.slice(0,10)){try{await addLiveSym(s,true)}catch(e){}}}finally{ADDING=false}}
+async function addLiveSym(s,quiet){if(SYM[s]&&SYM[s].live)return SYM[s];await lget('/api/add?sym='+encodeURIComponent(s));const uni=await lget('/api/universe');for(const u of uni.items)if(u.s===s||!SYM[u.s])ensureSym(u);if(!quiet)notify('info','➕ Added '+s+' — loading candles…',s,false);return SYM[s]}
+function moversHTML(){if(!LIVE.on)return'<div class="card mu small">Top movers come from Angel One (F&O-wide). Connect the live backend to see them.</div>';if(!MOVERS){loadMovers(true);return'<div class="card mu small">Loading movers…</div>'}
+  const L=MOVERS.lists||{},sec=(k,t,c)=>{const a=L[k]||[];if(!a.length)return'';return`<div class="card"><h3 class="${c}">${t}</h3>${a.slice(0,10).map(x=>{const s=SYM[x.s],r=s&&SCAN[x.s],bsig=r&&bestSig(r);return`<div class="row" data-mover="${esc(x.s)}"><div><div class="nm">${esc(x.s)}${bsig?`<span class="sig ${bsig.x.status}">${bsig.k} ${bsig.x.dir||''}</span>`:''}${s?'':' <span class="mu small">tap to add</span>'}</div><div class="sub">${x.oiChg!=null?'OI chg '+compact(x.oiChg)+' · ':''}${x.oi?'OI '+compact(x.oi):''}</div></div><div class="px"><div>${x.ltp?fp(x.ltp):s?fp(ltp(s)):'—'}</div><div class="small ${cls(x.pct)}">${pct(x.pct)}</div></div></div>`}).join('')}</div>`};
+  const vs=SYMS.filter(s=>s.seg==='STK'&&s.live&&s.live.q&&s.live.d1.length>5).map(s=>{const av=avg(s.live.d1.slice(-11,-1).map(x=>x.v)),M=marketOpen(s)?clamp((curMin(s)-555)/375,.05,1):1;return{s,r:av?s.live.q.vol/(av*M):0}}).filter(x=>x.r>0).sort((a,b)=>b.r-a.r).slice(0,8);
+  return`<div class="warn">🔥 F&O-wide movers from Angel One (near-month futures), refreshed every minute. Tap a stock to add it — it is then scanned for Jackpot/strategy calls. The top movers are added automatically.${MOVERS.errors&&MOVERS.errors.length?'<br><span class="dn">'+esc(MOVERS.errors.slice(0,3).join(' · '))+'</span>':''}</div>
+  <div class="grid2"><div>${sec('gainers','📈 Top gainers','up')}${sec('longBuildup','🟢 Long buildup (price↑ OI↑)','up')}${sec('shortCovering','🔵 Short covering (price↑ OI↓)','up')}${sec('oiGainers','OI gainers','ac')}</div>
+  <div>${sec('losers','📉 Top losers','dn')}${sec('shortBuildup','🔴 Short buildup (price↓ OI↑)','dn')}${sec('longUnwinding','🟠 Long unwinding (price↓ OI↓)','dn')}${sec('oiLosers','OI losers','ac')}</div></div>
+  ${vs.length?`<div class="card"><h3>🔊 Volume shockers (tracked stocks, vs 10-day avg pace)</h3>${vs.map(x=>`<div class="row" data-open="${x.s.s}"><div class="nm">${x.s.s}</div><div class="px"><div>${fp(ltp(x.s))}</div><div class="small ac">${x.r.toFixed(1)}× vol</div></div></div>`).join('')}</div>`:''}`}
+
+/* full-screen chart + pinch zoom */
+function toggleFS(){const w=$('#cvw');if(!w)return;const on=!w.classList.contains('fs');w.classList.toggle('fs',on);document.body.classList.toggle('noscroll',on);
+  try{if(on){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{});screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{})}else{document.fullscreenElement&&document.exitFullscreen().catch(()=>{});screen.orientation&&screen.orientation.unlock&&screen.orientation.unlock()}}catch(e){}
+  $('#fsb').textContent=on?'✕':'⛶';setTimeout(drawChart,80)}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement){const w=$('#cvw');if(w&&w.classList.contains('fs')){w.classList.remove('fs');document.body.classList.remove('noscroll');const b=$('#fsb');if(b)b.textContent='⛶';setTimeout(drawChart,80)}}});
+
 /* ---------------- UI STATE ---------------- */
-const view={tab:'mkt',sym:'TMPV',tf:'15m',opt:null,seg:'STK',filt:'all',q:'',bw:9,off:0,sel:null,aiLang:'en',ov:{ema:true,vwap:true,sr:true,fvg:true,sw:false,orb:true,prof:true,lv:true,ai:true}};
+const view={tab:'mkt',sym:'TMPV',tf:'15m',opt:null,seg:'STK',filt:'all',q:'',bw:9,off:0,sel:null,aiLang:'en',ov:{ema:true,vwap:true,sr:true,fvg:false,sw:false,orb:true,prof:true,lv:true,ai:true,tl:true}};
 function go(tab){view.tab=tab;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));render();window.scrollTo(0,0)}
 function openChart(s,opt){LIVE.t_c1=0;view.sym=s;view.opt=opt||null;view.off=0;view.sel=null;if(!SCAN[s])SCAN[s]=scanSym(SYM[s]);go('chart')}
 function render(){const m=$('#main');({mkt:renderMarkets,chart:renderChartTab,calls:renderCalls,strat:renderStrats,jrnl:renderJournal,set:renderSettings})[view.tab](m)}
@@ -791,11 +899,11 @@ function renderMarkets(m){if(!m.querySelector('#mk')){m.innerHTML=`<div class="w
   <div class="chips" id="segc"></div><input id="q" placeholder="Search symbol…" style="margin-bottom:8px"><div class="chips" id="filc"></div><div class="card" style="padding:4px 8px" id="mk"></div>`;
   $('#q').value=view.q;$('#q').oninput=e=>{view.q=e.target.value.toUpperCase();renderMkList()}}
   $('#mkWarn').innerHTML=LIVE.on?(anyMktOpen()?'Live Angel One feed. Signals use completed candles; paper trades only, no real orders.':'Live Angel One feed — market closed, showing the last session. Paper entries are blocked until the market opens.'):'Demo simulated feed. Stock prices start from your 13-Nov screenshots; index &amp; commodity levels are placeholders (✎ on the chart to set real LTP). Connect the live backend in Settings.';
-  $('#segc').innerHTML=[['STK','F&O Stocks'],['IDX','Indices'],['MCX','Commodities'],['ALL','All']].map(([k,n])=>`<button data-seg="${k}" class="${view.seg===k?'on':''}">${n}</button>`).join('');
+  $('#segc').innerHTML=[['MOV','🔥 Movers'],['STK','F&O Stocks'],['IDX','Indices'],['MCX','Commodities'],['ALL','All']].map(([k,n])=>`<button data-seg="${k}" class="${view.seg===k?'on':''}">${n}</button>`).join('');
   $('#filc').innerHTML=[['all','All'],['sig','Signals'],['gain','Gainers'],['lose','Losers'],['Long buildup','Long buildup'],['Short buildup','Short buildup'],['Short covering','Short covering'],['Long unwinding','Long unwinding']].map(([k,n])=>`<button data-fil="${k}" class="${view.filt===k?'on':''}">${n}</button>`).join('');
   renderMkList()}
 function bestSig(r){if(!r)return null;let b=null;for(const k in r.st){const x=r.st[k];const rank={SIGNAL:3,REJECTED:2,SETUP:1}[x.status]||0;if(rank&&(!b||rank>b.rank))b={rank,k,x}}return b}
-function renderMkList(){const box=$('#mk');if(!box)return;let a=SYMS.filter(s=>(!LIVE.on||s.live)&&(view.seg==='ALL'||s.seg===view.seg));if(view.q)a=a.filter(s=>s.s.includes(view.q)||s.n.toUpperCase().includes(view.q));
+function renderMkList(){const box=$('#mk');if(!box)return;const fc=$('#filc'),qi=$('#q');if(fc)fc.style.display=view.seg==='MOV'?'none':'';if(qi)qi.style.display=view.seg==='MOV'?'none':'';if(view.seg==='MOV'){box.className='';box.style.padding='0';box.innerHTML=moversHTML();return}box.className='card';box.style.padding='4px 8px';let a=SYMS.filter(s=>(!LIVE.on||s.live)&&(view.seg==='ALL'||s.seg===view.seg));if(view.q)a=a.filter(s=>s.s.includes(view.q)||s.n.toUpperCase().includes(view.q));
   if(view.filt==='gain')a=a.filter(s=>chgPct(s)>0).sort((x,y)=>chgPct(y)-chgPct(x));else if(view.filt==='lose')a=a.filter(s=>chgPct(s)<0).sort((x,y)=>chgPct(x)-chgPct(y));
   else if(view.filt==='sig')a=a.filter(s=>{const b=bestSig(SCAN[s.s]);return b&&b.rank>=1});else if(view.filt!=='all')a=a.filter(s=>SCAN[s.s]&&SCAN[s.s].bu===view.filt);
   box.innerHTML=a.map(s=>{const r=SCAN[s.s],c=chgPct(s),b=bestSig(r);return`<div class="row" data-open="${s.s}"><div><div class="nm">${s.s}${b?`<span class="sig ${b.x.status}">${b.k} ${b.x.status==='SIGNAL'?b.x.dir:b.x.status}</span>`:''}</div><div class="sub">${esc(s.n)}${r&&r.bu?' · '+r.bu:''}</div>
@@ -806,10 +914,11 @@ function mtfOpt(){const sym=SYM[view.sym],a={};for(const tf of TFS){if(tf==='1M'
 function pickFor(sym){const r=SCAN[sym.s];if(!r)return null;const A=r.A,a15=A['15m'];if(!a15.ok)return null;const dir=r.score>=0?'CE':'PE',sg=dir==='CE'?1:-1,en=ltp(sym);
   let inv=sg>0?(a15.sup[0]??en-1.5*a15.atr):(a15.res[0]??en+1.5*a15.atr),tg=sg>0?(A['1h'].res[0]??a15.res[0]??en+3*a15.atr):(A['1h'].sup[0]??a15.sup[0]??en-3*a15.atr);if(sg*(en-inv)<=0)inv=en-sg*1.5*a15.atr;if(sg*(tg-en)<=0)tg=en+sg*3*a15.atr;return{dir,pl:planOption(sym,dir,en,inv,tg),inv,tg,score:r.score}}
 function renderChartTab(m){const sym=SYM[view.sym];
-  m.innerHTML=`<div id="chh"></div><div class="chips" id="tfc"></div><div class="cvwrap" id="cvw"><canvas id="cv"></canvas><div class="legend" id="lg"></div><div class="zoom"><button data-z="-1">−</button><button data-z="1">+</button><button data-z="0">⟲</button></div></div>
+  m.innerHTML=`<div id="chh"></div><div class="chips" id="tfc"></div><div class="cvwrap" id="cvw"><canvas id="cv"></canvas><div class="legend" id="lg"></div><div class="zoom"><button data-z="-1">−</button><button data-z="1">+</button><button data-z="0">⟲</button><button id="fsb" data-act="fs" title="Full screen">⛶</button></div><div class="fstf" id="fstf"></div></div>
   <div class="chips" id="ovc" style="margin-top:6px"></div>
   <div class="card"><h3>AI chart analysis <span class="flex" style="margin-left:auto;gap:4px"><button data-lang="en" class="${view.aiLang==='en'?'on':''}">EN</button><button data-lang="ta" class="${view.aiLang==='ta'?'on':''}">தமிழ்</button></span></h3><button id="aiBtn" data-act="ai" style="width:100%">Run AI analysis on all timeframes</button><div id="aiOut" class="ai" style="margin-top:8px"></div></div>
   <div class="card"><h3>News · ${esc(sym.n)}</h3><div id="symNews"></div></div>
+  <div class="card" id="decc"></div>
   <div class="grid2"><div><div class="card" id="mtfc"></div><div class="card" id="pick"></div></div><div><div class="card" id="chainc"></div><div class="card" id="stc"></div></div></div>`;
   renderAIState();renderChartPanels();bindCanvas();drawChart();loadNews(newsQuery(sym),$('#symNews'))}
 function renderAIState(){const b=$('#aiBtn');if(!b)return;if(!aiReady()){b.textContent='AI analysis — connecting…';setTimeout(()=>{if(!aiReady()&&$('#aiBtn')){$('#aiBtn').textContent='AI text analysis — needs ANTHROPIC_API_KEY (tap for help)';$('#aiBtn').disabled=false}},LIVE.on?1500:11000)}else{b.disabled=false;b.textContent='Run AI analysis on all timeframes'}}
@@ -817,9 +926,11 @@ function renderChartHead(){const sym=SYM[view.sym],l=ltp(sym),c=chgPct(sym);let 
   if(view.opt){const q=quoteFor(sym,view.opt.K,view.opt.type,l);h=`<div class="chhead"><button data-act="back">← ${sym.s}</button><div><div class="mu small">${sym.s} ${view.opt.K} ${view.opt.type} · exp ${tDate(sym.exp)} · ${isLive(sym)&&!q.model?'live quote':'model premium'}</div><div class="big">${fp(q.ltp)}</div></div><div class="mono small"><div>Bid ${fp(q.bid)} / Ask ${fp(q.ask)}</div><div class="mu">Δ ${q.delta.toFixed(2)} · IV ${(q.iv*100).toFixed(1)}% · OI ${compact(q.oi)} (${compact(q.chg)})</div></div><div class="mono small mu">Underlying ${fp(l)} <span class="${cls(c)}">${pct(c)}</span></div></div>`}
   else h=`<div class="chhead"><div><div class="mu small">${esc(sym.n)} · ${sym.ex}${sym.unit?' · '+sym.unit:''}${sym.csv?' · <span class="ac">CSV data</span>':''}</div><div class="flex"><span style="font-weight:700;font-size:16px">${sym.s}</span><span class="big">${fp(l)}</span><span class="mono ${cls(c)}">${(l-prevC(sym)>=0?'+':'')+fmt(l-prevC(sym),2)} (${pct(c)})</span><button data-act="calib" title="Set real LTP">✎</button></div></div><div class="mono small mu" style="margin-left:auto">Lot ${sym.lot}≈ · Step ${sym.step}</div></div>`;
   $('#chh').innerHTML=h;
+  {const f=$('#fstf');if(f)f.innerHTML=TFS.map(t=>`<button data-tf="${t}" class="${view.tf===t?'on':''}">${t}</button>`).join('')}
   $('#tfc').innerHTML=TFS.map(t=>`<button data-tf="${t}" class="${view.tf===t?'on':''}">${t}</button>`).join('');
-  $('#ovc').innerHTML=Object.entries({ai:'AI arrow',lv:'PD/PW/PM levels',ema:'EMA 20/50',vwap:'VWAP',sr:'S/R',fvg:'FVG',sw:'Swings',orb:'ORB',prof:'Profile'}).map(([k,n])=>`<button data-ov="${k}" class="${view.ov[k]?'on':''}">${n}</button>`).join('')}
+  $('#ovc').innerHTML=Object.entries({ai:'AI arrow',tl:'Trade lines',lv:'PD/PW/PM levels',ema:'EMA 20/50',vwap:'VWAP',sr:'S/R',fvg:'FVG',sw:'Swings',orb:'ORB',prof:'Profile'}).map(([k,n])=>`<button data-ov="${k}" class="${view.ov[k]?'on':''}">${n}</button>`).join('')}
 function renderChartPanels(){if(!$('#chh'))return;renderChartHead();const sym=SYM[view.sym];if(!SCAN[sym.s])SCAN[sym.s]=scanSym(sym);const r=SCAN[sym.s],A=view.opt?mtfOpt():r.A;
+  {let D=null;try{D=view.opt?null:decide(sym,view.tf)}catch(e){console.error(e)}$('#decc').innerHTML=view.opt?'<h3>🧭 AI decision</h3><div class="mu small">Open the underlying chart for the full decision dashboard.</div>':decisionHTML(D,sym)}
   $('#mtfc').innerHTML=`<h3>Multi-timeframe analysis${view.opt?' · option premium':''}</h3><table><tr><th>TF</th><th>Trend</th><th>Structure</th><th>RSI</th><th>Break</th><th>Bias</th></tr>${TFS.map(tf=>{const a=A[tf];if(!a||!a.ok)return`<tr><td>${tf}</td><td colspan=5 class="mu t">not enough data</td></tr>`;
     return`<tr data-tf="${tf}" style="cursor:pointer"><td>${tf}</td><td class="${a.trend==='Up'?'up':a.trend==='Down'?'dn':'mu'}">${a.trend}</td><td class="${a.structure==='Bullish'?'up':a.structure==='Bearish'?'dn':'mu'}">${a.structure}</td><td>${a.rsi.toFixed(0)}</td><td class="${a.brk?a.brk.t==='BREAKOUT'?'up':'dn':'mu'}">${a.brk?(a.brk.t==='BREAKOUT'?'▲ ':'▼ ')+fp(a.brk.lvl)+(a.brk.fresh?'*':''):'—'}</td><td class="${a.bias>0?'up':a.bias<0?'dn':'mu'}">${a.bl}</td></tr>
     <tr><td></td><td colspan=5 class="t small mu" style="padding-top:0">${a.pat?'<span class="ac">'+a.pat.n+'</span> · ':''}S: ${a.sup.map(fp).join(', ')||'—'} · R: ${a.res.map(fp).join(', ')||'—'}${a.rv?' · Vol '+a.rv.toFixed(1)+'×':''}</td></tr>`}).join('')}</table><div class="note">Completed candles only. * = fresh break on the last closed candle. Swings confirm after 2 closed candles.</div>`;
@@ -853,12 +964,13 @@ function planHTML(sym,pl,dir,k,x){const p=pl.best||pl.top;if(!p)return'';const o
 
 /* ---------- CANVAS CHART ---------- */
 function chartBars(){const sym=SYM[view.sym];return view.opt?optBars(sym,view.opt.K,view.opt.type,view.tf):getTF(sym,view.tf).slice(-600)}
-function bindCanvas(){const cv=$('#cv');let sx=null,so=0,moved=false;
-  cv.onpointerdown=e=>{sx=e.clientX;so=view.off;moved=false;cv.setPointerCapture(e.pointerId)};
-  cv.onpointermove=e=>{if(sx==null)return;const dx=e.clientX-sx;if(Math.abs(dx)>4)moved=true;view.off=Math.max(0,Math.round(so+dx/view.bw));drawChart()};
-  cv.onpointerup=e=>{if(!moved){const r=cv.getBoundingClientRect();view.sel={x:e.clientX-r.left};drawChart()}sx=null}}
+function bindCanvas(){const cv=$('#cv'),P=new Map();let sx=null,so=0,moved=false,pd0=1,bw0=9;
+  cv.onpointerdown=e=>{P.set(e.pointerId,e.clientX);try{cv.setPointerCapture(e.pointerId)}catch(x){}if(P.size===1){sx=e.clientX;so=view.off;moved=false}else if(P.size===2){const v=[...P.values()];pd0=Math.abs(v[0]-v[1])||1;bw0=view.bw;moved=true}};
+  cv.onpointermove=e=>{if(!P.has(e.pointerId))return;P.set(e.pointerId,e.clientX);if(P.size===2){const v=[...P.values()];view.bw=clamp(bw0*(Math.abs(v[0]-v[1])||1)/pd0,3,30);drawChart();return}if(sx==null)return;const dx=e.clientX-sx;if(Math.abs(dx)>4)moved=true;view.off=Math.max(0,Math.round(so+dx/view.bw));drawChart()};
+  const up=e=>{if(P.size===1&&!moved){const r=cv.getBoundingClientRect();view.sel={x:e.clientX-r.left};drawChart()}P.delete(e.pointerId);if(!P.size)sx=null};cv.onpointerup=up;cv.onpointercancel=up;
+  cv.onwheel=e=>{e.preventDefault();view.bw=clamp(view.bw*(e.deltaY<0?1.12:.89),3,30);drawChart()}}
 function drawChart(){const cv=$('#cv');if(!cv)return;const sym=SYM[view.sym],dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;if(!W)return;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
-  const all=chartBars();if(!all.length){g.fillStyle='#7f8aa0';g.fillText('No data for this timeframe',12,24);return}
+  const all=chartBars();if(!all.length){g.fillStyle='#7f8aa0';g.fillText(isLive(sym)&&!sym.live.ready?'Loading candles from Angel… ('+(LIVE.loaded??0)+'/'+(LIVE.total??'?')+' symbols ready, refreshes automatically)':'No data for this timeframe',12,24);return}
   const compA=complete(all),pj=view.ov.ai&&view.off===0?analogFor(view.opt?view.sym+view.opt.K+view.opt.type:view.sym,compA,view.tf):null;
   const intr=!!TFM[view.tf],AX=58,bw=view.bw,nVis=Math.max(10,Math.floor((W-AX-6)/bw)-(pj?pj.H+3:0)),end=Math.max(1,all.length-view.off),start=Math.max(0,end-nVis),vis=all.slice(start,end);
   const cAll=all.map(b=>b.c),e20=ema(cAll,20),e50=ema(cAll,50),vw=intr?vwapArr(all):null;
@@ -869,7 +981,9 @@ function drawChart(){const cv=$('#cv');if(!cv)return;const sym=SYM[view.sym],dpr
   for(let i=0;i<=5;i++){const p=lo+(hi-lo)*i/5,yy=y(p);g.beginPath();g.moveTo(0,yy);g.lineTo(W-AX,yy);g.stroke();g.fillText(fp(p),W-AX+4,yy+3)}
   const vmax=Math.max(...vis.map(b=>b.v))||1;
   // levels
-  const hl=(p,col,lab,dash=[4,4])=>{if(p==null||p<lo||p>hi)return;const yy=y(p);g.setLineDash(dash);g.strokeStyle=col;g.beginPath();g.moveTo(0,yy);g.lineTo(W-AX,yy);g.stroke();g.setLineDash([]);g.fillStyle=col;g.fillText(lab,W-AX-g.measureText(lab).width-4,yy-3)};
+  const usedY=[],hl=(p,col,lab,dash=[4,4])=>{if(p==null||p<lo||p>hi)return;const yy=y(p);g.setLineDash(dash);g.strokeStyle=col;g.beginPath();g.moveTo(0,yy);g.lineTo(W-AX,yy);g.stroke();g.setLineDash([]);if(usedY.some(u=>Math.abs(u-yy)<12))return;usedY.push(yy);g.fillStyle=col;g.fillText(lab,W-AX-g.measureText(lab).width-4,yy-3)};
+  {const D=!view.opt&&view.ov.tl?DEC[sym.s+'|'+view.tf]:null;if(D&&D.dir&&D.decision!=='AVOID'&&D.inv!=null){g.lineWidth=1.4;hl(D.en,'#e5e7eb','ENTRY '+fp(D.en),[3,3]);hl(D.inv,'#ff5468','SL '+fp(D.inv),[]);D.tgts.slice(0,3).forEach((t,i)=>hl(t,'#22e08a','T'+(i+1)+' '+fp(t),[6,3]));g.lineWidth=1}}
+
   if(view.ov.sr&&an.ok){an.res.forEach((p,i)=>hl(p,'#d0505f','R'+(i+1)+' '+fp(p)));an.sup.forEach((p,i)=>hl(p,'#2fae6e','S'+(i+1)+' '+fp(p)))}
   if(pr){hl(pr.poc,'#f5b301','POC '+fp(pr.poc),[2,2]);hl(pr.vah,'#a78bfa','VAH '+fp(pr.vah));hl(pr.val,'#a78bfa','VAL '+fp(pr.val))}
   if(!view.opt&&view.ov.orb&&intr&&TFM[view.tf]<=15){const t5=todayOf(sym,complete(getTF(sym,'5m')));if(t5.length){const o=t5[0];const i0=vis.findIndex(b=>b.t>=o.t);if(i0>=0){g.strokeStyle='#4c8dff';g.setLineDash([6,3]);[o.h,o.l].forEach(p=>{if(p<lo||p>hi)return;g.beginPath();g.moveTo(x(i0),y(p));g.lineTo(W-AX,y(p));g.stroke()});g.setLineDash([]);g.fillStyle='#4c8dff';g.fillText('ORH',x(i0)+2,y(o.h)-3);g.fillText('ORL',x(i0)+2,y(o.l)+11)}}}
@@ -886,9 +1000,9 @@ function drawChart(){const cv=$('#cv');if(!cv)return;const sym=SYM[view.sym],dpr
   if(view.ov.sw){const sw=swings(comp,2);sw.forEach(s=>{const i=s.i-start;if(i<0||i>=vis.length)return;g.fillStyle=s.type==='H'?'#f0475a':'#1fc77a';g.fillText(s.type==='H'?'▼':'▲',x(i)-4,s.type==='H'?y(s.p)-4:y(s.p)+11)})}
   if(pj&&compA.length){const lc=last(compA).c,x0=x(vis.length-1),x1=x0+pj.H*bw,d=aiDir(pj),col=d>0?'#1fc77a':d<0?'#f0475a':'#9aa4b8';
     g.fillStyle=d>0?'rgba(31,199,122,.15)':d<0?'rgba(240,71,90,.15)':'rgba(154,164,184,.12)';g.beginPath();g.moveTo(x0,y(lc));g.lineTo(x1,y(lc*(1+pj.p75)));g.lineTo(x1,y(lc*(1+pj.p25)));g.closePath();g.fill();
-    const y0=y(lc),ye=y(lc*(1+pj.mean));g.strokeStyle=col;g.lineWidth=2.2;g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,ye);g.stroke();g.lineWidth=1;
-    const an=Math.atan2(ye-y0,x1-x0);g.beginPath();g.moveTo(x1,ye);g.lineTo(x1-10*Math.cos(an-.45),ye-10*Math.sin(an-.45));g.lineTo(x1-10*Math.cos(an+.45),ye-10*Math.sin(an+.45));g.closePath();g.fillStyle=col;g.fill();
-    g.font='bold 11px IBM Plex Mono, monospace';g.fillStyle=col;g.fillText((d>0?'AI ▲ ':d<0?'AI ▼ ':'AI • ')+Math.round((d<0?1-pj.up:pj.up)*100)+'%',Math.max(4,Math.min(x1-58,W-AX-70)),Math.max(14,Math.min(pH-4,ye+(d>0?-9:16))));g.font='10px IBM Plex Mono, monospace'}
+    const y0=y(lc),ye=y(lc*(1+pj.mean));g.strokeStyle=col;g.lineWidth=3.4;g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,ye);g.stroke();g.lineWidth=1;
+    const an=Math.atan2(ye-y0,x1-x0);g.beginPath();g.moveTo(x1,ye);g.lineTo(x1-17*Math.cos(an-.45),ye-17*Math.sin(an-.45));g.lineTo(x1-17*Math.cos(an+.45),ye-17*Math.sin(an+.45));g.closePath();g.fillStyle=col;g.fill();
+    g.font='bold 14px IBM Plex Mono, monospace';g.fillStyle=col;g.fillText((d>0?'AI ▲ ':d<0?'AI ▼ ':'AI ◆ ')+Math.round((d<0?1-pj.up:pj.up)*100)+'%',Math.max(4,Math.min(x1-58,W-AX-70)),Math.max(14,Math.min(pH-4,ye+(d>0?-9:16))));g.font='10px IBM Plex Mono, monospace'}
   // time labels
   g.fillStyle='#5f6b80';const every=Math.max(1,Math.round(70/bw));vis.forEach((b,i)=>{if(i%every)return;g.fillText(intr?tHM(b.t):view.tf==='1M'?tDate(b.t).split(' ')[1]+' '+String(new Date(b.t).getUTCFullYear()).slice(2):tDate(b.t),x(i)-14,H-2)});
   // last price
@@ -938,7 +1052,7 @@ function renderSettings(m){const f=(k,l)=>`<div><label>${l}</label><input data-c
   m.innerHTML=`<div class="card"><h3>Live feed — Angel One (KRT backend)</h3><div class="small mu">Deploy the <b>backend</b> folder as a Render Web Service with your Angel SmartAPI keys. Then paste its URL and your ACCESS_KEY here. Keys stay on the server and are never stored in this page.</div><div class="form" style="margin-top:8px"><div><label>Backend URL</label><input id="lvUrl" placeholder="https://krt-backend.onrender.com" value="${esc(LIVE.url)}"></div><div><label>ACCESS_KEY</label><input id="lvKey" type="password" value="${esc(LIVE.key)}"></div></div><div class="flex" style="margin-top:8px"><button data-act="lvconn" class="on">${LIVE.on?'Reconnect':'Connect live'}</button>${LIVE.on?'<button data-act="lvdisc">Back to demo</button>':''}</div><div id="lvState" class="note"></div></div>
   <div class="card"><h3>Common risk controls</h3><div class="form">${f('riskCap','Max risk / trade ₹ (incl. costs)')}${f('capital','Capital ₹')}${f('capPct','Capital risk %')}${f('dailyLoss','Daily loss limit ₹')}${f('slipPct','Slippage allowance %')}${f('brokerage','Brokerage / order ₹')}${f('maxCorr','Max same-sector same-direction positions')}${f('minRR','Min net R:R')}${f('emergPct','Emergency stop (× risk beyond SL)')}${f('minOI','Min option OI')}${f('minOptVol','Min option volume')}${f('maxSpr','Max spread %')}</div>
   <div class="note">Effective risk budget = min(₹${CFG.riskCap}, ${CFG.capPct}% of capital) = <b>₹${fmt(budget(),0)}</b>. If one lot's risk is above the budget, the trade is skipped. The SL is never tightened to fit the budget.</div>
-  <label class="tog"><input type="checkbox" data-cfgb="autoPaper" ${CFG.autoPaper?'checked':''}> Auto paper-trade every SIGNAL (for forward-test sample collection)</label></div>
+  <label class="tog"><input type="checkbox" data-cfgb="autoPaper" ${CFG.autoPaper?'checked':''}> Auto paper-trade every SIGNAL (for forward-test sample collection)</label><label class="tog"><input type="checkbox" data-cfgb="autoAdd" ${CFG.autoAdd!==false?'checked':''}> Auto-add top Angel movers to the scan (live)</label></div>
   <div class="card"><h3>Load real candles (CSV)</h3><div class="small mu">Export intraday or daily candles from your broker or charting tool. Expected columns: date[,time],open,high,low,close[,volume]. Times should be in IST. The chart, multi-timeframe analysis, ORB, Silver Bullet and MCX profile then run on your data. OI-based strategies stay blocked, because the option chain would still be synthetic.</div>
   <div class="form" style="margin-top:8px"><div><label>Symbol</label><select id="csvSym">${SYMS.map(s=>`<option ${s.s===view.sym?'selected':''}>${s.s}</option>`).join('')}</select></div><div><label>File</label><input type="file" id="csvFile" accept=".csv,.txt"></div></div><div id="csvMsg" class="note"></div>
   <div class="flex" style="margin-top:6px">${SYMS.filter(s=>s.csv).map(s=>`<button data-uncsv="${s.s}">Remove CSV: ${s.s}</button>`).join('')}</div></div>
@@ -947,18 +1061,19 @@ function renderSettings(m){const f=(k,l)=>`<div><label>${l}</label><input data-c
   $('#csvFile').onchange=e=>{const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=()=>{const sym=SYM[$('#csvSym').value];try{const r=parseCSV(rd.result,sym);sym.csv=r;sym.ver=(sym.ver||0)+1;CACHE.clear();SCAN[sym.s]=scanSym(sym);$('#csvMsg').innerHTML='<span class="up">Loaded '+r.bars.length+' candles ('+(r.base>=1440?'daily':r.base+'-min')+') for '+sym.s+'.</span>';renderSettings(m)}catch(err){$('#csvMsg').innerHTML='<span class="dn">'+esc(err.message)+'</span>'}};rd.readAsText(file)}}
 
 /* ---------- EVENTS ---------- */
-document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data-open],[data-openopt],[data-seg],[data-fil],[data-tf],[data-ov],[data-z],[data-optk],[data-act],[data-paper],[data-lang],[data-uncsv],[data-chainopt],[data-manual]');if(!t)return;const d=t.dataset;
+document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data-open],[data-openopt],[data-seg],[data-fil],[data-tf],[data-ov],[data-z],[data-optk],[data-act],[data-paper],[data-lang],[data-uncsv],[data-chainopt],[data-manual],[data-mover]');if(!t)return;const d=t.dataset;
+  if(d.mover){const ms=d.mover;if(SYM[ms]&&SYM[ms].live)return openChart(ms);t.querySelector('.sub')&&(t.querySelector('.sub').textContent='Adding '+ms+'…');addLiveSym(ms).then(()=>openChart(ms)).catch(e=>{t.querySelector('.sub')&&(t.querySelector('.sub').textContent=e.message)});return}
   if(d.chainopt){const[k,ty]=d.chainopt.split('|');return optSheet(view.sym,+k,ty)}if(d.manual){const[ms,mk,mt]=d.manual.split('|');return optSheet(ms,+mk,mt)}
   if(d.tab)return go(d.tab);if(d.openopt){const[s,K,ty]=d.openopt.split('|');return openChart(s,{K:+K,type:ty})}if(d.open)return openChart(d.open);
   if(d.seg){view.seg=d.seg;return renderMarkets($('#main'))}if(d.fil){view.filt=d.fil;return renderMarkets($('#main'))}
-  if(d.tf){view.tf=d.tf;view.off=0;view.sel=null;renderChartHead();return drawChart()}if(d.ov){view.ov[d.ov]=!view.ov[d.ov];renderChartHead();return drawChart()}
+  if(d.tf){view.tf=d.tf;view.off=0;view.sel=null;renderChartPanels();return drawChart()}if(d.ov){view.ov[d.ov]=!view.ov[d.ov];renderChartHead();return drawChart()}
   if(d.z){const z=+d.z;view.bw=z===0?9:clamp(view.bw+z*2,3,25);if(z===0){view.off=0;view.sel=null}return drawChart()}
   if(d.optk){view.opt={K:+d.optk,type:d.optt};view.off=0;view.sel=null;renderChartPanels();return drawChart()}
   if(d.lang){view.aiLang=d.lang;document.querySelectorAll('[data-lang]').forEach(b=>b.classList.toggle('on',b.dataset.lang===d.lang));return}
   if(d.paper){const[s,k,dir]=d.paper.split('|'),sym=SYM[s];let plan,meta={};if(k==='JACKPOT'){const x=JACK.ce.concat(JACK.pe).find(z=>z.s.s===s&&z.dir===dir);plan=x&&x.plan;meta={setupId:'J'+curDay(sym)}}else if(k==='CALLS'){const x=TOP.ce.concat(TOP.pe).find(z=>z.s.s===s&&z.dir===dir)||{pl:pickFor(sym).pl};plan=x.pl;meta={setupId:'C'+S.clock}}else{const x=SCAN[s].st[k];plan=x.plan;meta=x}
     const msg=plan?openPaper(sym,k,plan,dir,meta):'Setup changed — refresh';t.textContent=msg;t.disabled=true;return}
   if(d.uncsv){const s=SYM[d.uncsv];delete s.csv;s.ver=(s.ver||0)+1;CACHE.clear();SCAN[s.s]=scanSym(s);return renderSettings($('#main'))}
-  const a=d.act;if(a==='jarvis')return openJarvis();if(a==='jvask')return jarvisAsk();
+  const a=d.act;if(a==='fs')return toggleFS();if(a==='mood')return openMood();if(a==='jarvisguide')return jarvisAsk();if(a==='jarvis')return openJarvis();if(a==='jvask')return jarvisAsk();
   if(a==='sheetchart'){const P=view.pend;$('#modal').classList.remove('show');return openChart(P.s,{K:P.K,type:P.type})}
   if(a==='sheetpaper'){const P=view.pend,ms=SYM[P.s];$('#mMsg').innerHTML=esc(openManual(ms,P.K,P.type,Math.max(1,parseInt($('#mLots').value)||1),parseFloat($('#mSl').value),parseFloat($('#mT1').value),parseFloat($('#mT2').value)));return}
   if(a==='lvconn'){LIVE.url=$('#lvUrl').value.trim();LIVE.key=$('#lvKey').value.trim();sv('krt_live',{url:LIVE.url,key:LIVE.key,auto:true});return connectLive()}if(a==='lvdisc'){sv('krt_live',{url:LIVE.url,key:LIVE.key,auto:false});return disconnectLive()}
@@ -996,7 +1111,7 @@ function tick(){if(LIVE.on){const mm=Math.floor(istNow()/6e4);if(mm!==LIVE.lastM
 try{const c=ld('krt_calib',{});for(const k in c){const s=SYM[k];if(!s)continue;const f=c[k];const sc=b=>{b.o*=f;b.h*=f;b.l*=f;b.c*=f};s.daily.forEach(sc);s.intra.forEach(sc);s.today.forEach(sc);s.prevClose*=f;s.px*=f}}catch(e){}
 try{const L=ld('krt_lots',{});for(const k in L)if(SYM[k])SYM[k].lot=L[k]}catch(e){}
 POS=POS.filter(p=>SYM[p.sym]);
-scanAll();renderTicker();go('mkt');setInterval(tick,250);
+scanAll();renderTicker();renderMood();go('mkt');setInterval(tick,250);
 setInterval(liveLoop,1000);
 if(window.KRT_SAME_ORIGIN){LIVE.url=location.origin;if(!window.KRT_NEEDS_KEY||LIVE.key)connectLive();else{go('set');setTimeout(()=>{const e=$('#lvState');if(e)e.innerHTML='<span class="ac">Enter your ACCESS_KEY above and tap Connect live.</span>'},50)}}
 else if(LIVE.url&&LIVE.auto)connectLive();
